@@ -5,14 +5,14 @@
 # Process OSMetaClass instances in a kernelcache.
 #
 
-from ida_utilities import (idc, set_name)
+from ida_utilities import *
 
 from kernelcache_class_info import kernelcache_collect_class_info
 
-_kernelcache_metaclass_symbols__log_level = 0
+_log_level = 0
 
 def _log(level, fmt, *args):
-    if level <= _kernelcache_metaclass_symbols__log_level:
+    if level <= _log_level:
         print 'kernelcache_metaclass_symbols: ' + fmt.format(*args)
 
 def kernelcache_metaclass_name_for_class(classname):
@@ -57,7 +57,7 @@ OK = False
 def _initialize():
     global OK
     OSObject_gMetaClass = kernelcache_metaclass_symbol_for_class("OSObject")
-    if idc.LocByName(OSObject_gMetaClass) == idc.BADADDR:
+    if get_name_ea(OSObject_gMetaClass) == idc.BADADDR:
         _log(-1, 'Cannot locate OSMetaClass instance for OSObject; either this is not a '
                 'recognized kernelcache or symbol generation is broken. Disabling module '
                 'functionality.')
@@ -85,9 +85,9 @@ def kernelcache_add_metaclass_symbol(metaclass, classname):
     if not _check_ok():
         return False
     metaclass_symbol = kernelcache_metaclass_symbol_for_class(classname)
-    if not set_name(metaclass, metaclass_symbol):
+    if not set_ea_name(metaclass, metaclass_symbol):
         _log(0, 'Address {:#x} already has name {} instead of OSMetaClass instance symbol {}'
-                .format(metaclass, idc.NameEx(idc.BADADDR, metaclass), metaclass_symbol))
+                .format(metaclass, get_ea_name(metaclass), metaclass_symbol))
         return False
     return True
 

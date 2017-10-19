@@ -11,10 +11,10 @@ from collections import defaultdict
 
 from kernelcache_vtable_utilities import (VTABLE_OFFSET, kernelcache_vtable_length)
 
-_kernelcache_class_info__log_level = 3
+_log_level = 1
 
 def _log(level, fmt, *args):
-    if level <= _kernelcache_class_info__log_level:
+    if level <= _log_level:
         print 'kernelcache_class_info: ' + fmt.format(*args)
 
 # IDK where IDA defines these.
@@ -24,10 +24,7 @@ _MEMOP_POSTINDEX = 0x80
 _MEMOP_WBINDEX   = _MEMOP_PREINDEX | _MEMOP_POSTINDEX
 
 class _Regs(object):
-    """A set of registers for _emulate_arm64.
-
-    Internal use only.
-    """
+    """A set of registers for _emulate_arm64."""
 
     class _Unknown:
         """A wrapper class indicating that the value is unknown."""
@@ -71,10 +68,8 @@ class _Regs(object):
             self._regs[self._reg(reg)] = value & 0xffffffffffffffff
 
 def _emulate_arm64(start, end, on_BL=None, on_RET=None):
-    """A very basic partial Arm64 emulator that does just enough to find OSMetaClass information.
-
-    Internal use only.
-    """
+    """A very basic partial Arm64 emulator that does just enough to find OSMetaClass
+    information."""
     # Super basic emulation.
     reg = _Regs()
     def load(addr, dtyp):
@@ -128,10 +123,7 @@ def _emulate_arm64(start, end, on_BL=None, on_RET=None):
             reg.clearall()
 
 class _OneToOneMapFactory(object):
-    """A factory to extract the largest one-to-one submap.
-
-    Internal use only.
-    """
+    """A factory to extract the largest one-to-one submap."""
 
     def __init__(self):
         self._as_to_bs = defaultdict(set)
@@ -188,10 +180,7 @@ class ClassInfo(object):
                 self.class_size, self.superclass_name, hex(self.meta_superclass))
 
 def _process_mod_init_func_for_metaclasses(func, found_metaclass):
-    """Process a function from the __mod_init_func section for OSMetaClass information.
-
-    Internal use only.
-    """
+    """Process a function from the __mod_init_func section for OSMetaClass information."""
     _log(4, 'Processing function {}', idc.GetFunctionName(func))
     def on_BL(addr, reg):
         X0, X1, X3 = reg['X0'], reg['X1'], reg['X3']
@@ -205,19 +194,13 @@ def _process_mod_init_func_for_metaclasses(func, found_metaclass):
     _emulate_arm64(func, idc.FindFuncEnd(func), on_BL=on_BL)
 
 def _process_mod_init_func_section_for_metaclasses(segstart, found_metaclass):
-    """Process a __mod_init_func section for OSMetaClass information.
-
-    Internal use only.
-    """
+    """Process a __mod_init_func section for OSMetaClass information."""
     segend = idc.SegEnd(segstart)
     for func in ReadWords(segstart, segend):
         _process_mod_init_func_for_metaclasses(func, found_metaclass)
 
 def _collect_metaclasses():
-    """Collect OSMetaClass information from all kexts in the kernelcache.
-
-    Internal use only.
-    """
+    """Collect OSMetaClass information from all kexts in the kernelcache."""
     # Collect associations from class names to metaclass instances and vice versa.
     metaclass_to_classname_builder = _OneToOneMapFactory()
     metaclass_to_class_size      = dict()
@@ -256,10 +239,7 @@ _VTABLE_GETMETACLASS    = VTABLE_OFFSET + 7
 _MAX_GETMETACLASS_INSNS = 3
 
 def _get_vtable_metaclass(vtable_addr, metaclass_info):
-    """Simulate the getMetaClass method of the vtable and check if it returns an OSMetaClass.
-
-    Internal use only.
-    """
+    """Simulate the getMetaClass method of the vtable and check if it returns an OSMetaClass."""
     getMetaClass = read_word(vtable_addr + _VTABLE_GETMETACLASS * WORD_SIZE)
     def on_RET(reg):
         on_RET.ret = reg['X0']
@@ -269,10 +249,7 @@ def _get_vtable_metaclass(vtable_addr, metaclass_info):
         return on_RET.ret
 
 def _process_const_section_for_vtables(segstart, metaclass_info, found_vtable):
-    """Process a __const section to search for virtual method tables.
-
-    Internal use only.
-    """
+    """Process a __const section to search for virtual method tables."""
     segend = idc.SegEnd(segstart)
     addr = segstart
     while addr < segend:
@@ -285,10 +262,7 @@ def _process_const_section_for_vtables(segstart, metaclass_info, found_vtable):
         addr += length * WORD_SIZE
 
 def _collect_vtables(metaclass_info):
-    """Use OSMetaClass information to search for virtual method tables.
-
-    Internal use only.
-    """
+    """Use OSMetaClass information to search for virtual method tables."""
     # Build a mapping from OSMetaClass instances to virtual method tables.
     metaclass_to_vtable_builder = _OneToOneMapFactory()
     def found_vtable(metaclass, vtable):
@@ -323,17 +297,11 @@ def _collect_vtables(metaclass_info):
     return class_info
 
 def _check_filetype(filetype):
-    """Checks that the filetype is compatible before trying to process it.
-
-    Internal use only.
-    """
+    """Checks that the filetype is compatible before trying to process it."""
     return 'Mach-O' in filetype and 'ARM64' in filetype
 
 def _collect_class_info():
-    """Collect information about C++ classes defined in a kernelcache.
-
-    Internal use only.
-    """
+    """Collect information about C++ classes defined in a kernelcache."""
     filetype = idaapi.get_file_type_name()
     if not _check_filetype(filetype):
         _log(-1, 'Bad file type "{}"', filetype)

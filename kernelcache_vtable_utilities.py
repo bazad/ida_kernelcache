@@ -13,10 +13,10 @@ VTABLE_OFFSET      =  2
 MIN_VTABLE_METHODS = 12
 MIN_VTABLE_LENGTH  = VTABLE_OFFSET + MIN_VTABLE_METHODS
 
-_kernelcache_vtable_utilities__log_level = 0
+_log_level = 0
 
 def _log(level, fmt, *args):
-    if level <= _kernelcache_vtable_utilities__log_level:
+    if level <= _log_level:
         print 'kernelcache_vtable_utilities: ' + fmt.format(*args)
 
 def kernelcache_vtable_length(ea, end=None, scan=False):

@@ -2,10 +2,14 @@
 # kernelcache_vtable_symbols.py
 # Brandon Azad
 #
+# Process C++ virtual method tables in a kernelcache.
+#
 
 from ida_utilities import *
-from kernelcache_class_info import *
-from kernelcache_vtable_utilities import *
+
+from kernelcache_class_info import kernelcache_collect_class_info
+from kernelcache_vtable_utilities import (kernelcache_vtable_length,
+        kernelcache_convert_vtable_to_offsets)
 
 _kernelcache_vtable_symbols__log_level = 1
 
@@ -22,8 +26,8 @@ def kernelcache_vtable_symbol_for_class(classname):
     Returns:
         The symbol name, or None if the classname is invalid.
     """
-    symbol = '__ZTV'
     scopes = classname.split('::')
+    symbol = '__ZTV'
     if len(scopes) > 1:
         symbol += 'N'
     for name in scopes:
@@ -47,26 +51,26 @@ def kernelcache_add_vtable_symbol(vtable, classname, make_offsets=True):
     if make_offsets and not kernelcache_convert_vtable_to_offsets(vtable):
         return False
     vtable_symbol = kernelcache_vtable_symbol_for_class(classname)
-    if hasUserName(GetFlags(vtable)):
-        current_name = NameEx(BADADDR, vtable)
-        if current_name != vtable_symbol:
-            _log(0, 'Address {:#x} already has name {} instead of vtable symbol {}'
-                    .format(vtable, current_name, vtable_symbol))
-            return False
-    else:
-        MakeName(vtable, vtable_symbol)
+    if not set_name(vtable, vtable_symbol):
+        _log(0, 'Address {:#x} already has name {} instead of vtable symbol {}'
+                .format(vtable, idc.NameEx(idc.BADADDR, vtable), vtable_symbol))
+        return False
     return True
 
 
 def kernelcache_add_vtable_symbols():
     """Populate IDA with virtual method table information for an iOS kernelcache.
 
-    Search through the kernelcache for virtual method tables and add symbols
+    Search through the kernelcache for virtual method tables, convert each identified virtual
+    method table into a sequence of offsets, and add a symbol for each virtual method table.
     """
     class_info_map = kernelcache_collect_class_info()
     for classname, classinfo in class_info_map.items():
-        _log(1, 'Class {} has vtable at {:#x}', classname, classinfo.vtable)
-        if not kernelcache_add_vtable_symbol(classinfo.vtable, classname):
-            _log(0, 'Could not add vtable for class {} at address {:#x}', classname,
-                    classinfo.vtable)
+        if classinfo.vtable:
+            _log(1, 'Class {} has vtable at {:#x}', classname, classinfo.vtable)
+            if not kernelcache_add_vtable_symbol(classinfo.vtable, classname):
+                _log(0, 'Could not add vtable for class {} at address {:#x}', classname,
+                        classinfo.vtable)
+        else:
+            _log(1, 'Class {} has no known vtable', classname)
 

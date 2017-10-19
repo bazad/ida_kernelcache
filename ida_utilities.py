@@ -2,9 +2,11 @@
 # ida_utilities.py
 # Brandon Azad
 #
+# Some utility functions to make working with IDA easier.
+#
 
-from idc import *
-from idautils import *
+import idc
+import idautils
 import idaapi
 
 from collections import deque
@@ -50,7 +52,27 @@ def is_mapped(ea, size=1):
     Specify a size greater than 1 to check if an address range is mapped.
     """
     # HACK: We only check the first and last byte, not all the bytes in between.
-    return isLoaded(ea) and (size > 1 or isLoaded(ea + size - 1))
+    return idc.isLoaded(ea) and (size > 1 or idc.isLoaded(ea + size - 1))
+
+def set_name(ea, name, rename=False):
+    """Set the name of an address.
+
+    Arguments:
+        ea: The address to name.
+        name: The new name of the address.
+
+    Options:
+        rename: If rename is False, and if the address already has a name, and if that name differs
+            from the new name, then this function will fail. Set rename to True to rename the
+            address even if it already has a custom name. Default is False.
+
+    Returns:
+        True if the address was successfully named (or renamed).
+    """
+    if not rename and idc.hasUserName(idc.GetFlags(ea)):
+        current_name = idc.NameEx(idc.BADADDR, ea)
+        return current_name == name
+    return bool(idc.MakeName(ea, name))
 
 def _addresses(start, end, step, partial, aligned):
     """A generator to iterate over the addresses in an address range.
@@ -136,7 +158,7 @@ def Instructions(start, end):
     """
     pc = start
     while pc < end:
-        insn = DecodeInstruction(pc)
+        insn = idautils.DecodeInstruction(pc)
         if insn is None:
             break
         next_pc = pc + insn.size
@@ -154,13 +176,13 @@ def read_word(ea, wordsize=WORD_SIZE):
     if not is_mapped(ea, wordsize):
         return None
     if wordsize == 1:
-        return Byte(ea)
+        return idc.Byte(ea)
     if wordsize == 2:
-        return Word(ea)
+        return idc.Word(ea)
     if wordsize == 4:
-        return Dword(ea)
+        return idc.Dword(ea)
     if wordsize == 8:
-        return Qword(ea)
+        return idc.Qword(ea)
     assert wordsize in (1, 2, 4, 8)
 
 def ReadWords(start, end, wordsize=WORD_SIZE, addresses=False):

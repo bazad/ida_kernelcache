@@ -2,15 +2,14 @@
 # kernelcache_class_info.py
 # Brandon Azad
 #
+# Collect information about C++ classes in a kernelcache.
+#
 
-from idc import *
-from idautils import *
-import idaapi
+from ida_utilities import *
 
 from collections import defaultdict
 
-from ida_utilities import *
-from kernelcache_vtable_utilities import *
+from kernelcache_vtable_utilities import (VTABLE_OFFSET, kernelcache_vtable_length)
 
 _kernelcache_class_info__log_level = 3
 
@@ -39,7 +38,7 @@ class _Regs(object):
         def __nonzero__(self):
             return False
 
-    _reg_names = GetRegisterList()
+    _reg_names = idautils.GetRegisterList()
     Unknown = _Unknown()
 
     def __init__(self):
@@ -96,19 +95,19 @@ def _emulate_arm64(start, end, on_BL=None, on_RET=None):
         mnem = insn.get_canon_mnem()
         if mnem == 'ADRP' or mnem == 'ADR':
             reg[insn.Op1.reg] = insn.Op2.value
-        elif mnem == 'ADD' and insn.Op2.type == o_reg and insn.Op3.type == o_imm:
+        elif mnem == 'ADD' and insn.Op2.type == idc.o_reg and insn.Op3.type == idc.o_imm:
             reg[insn.Op1.reg] = reg[insn.Op2.reg] + insn.Op3.value
         elif mnem == 'NOP':
             pass
-        elif mnem == 'MOV' and insn.Op2.type == o_imm:
+        elif mnem == 'MOV' and insn.Op2.type == idc.o_imm:
             reg[insn.Op1.reg] = insn.Op2.value
-        elif mnem == 'MOV' and insn.Op2.type == o_reg:
+        elif mnem == 'MOV' and insn.Op2.type == idc.o_reg:
             reg[insn.Op1.reg] = reg[insn.Op2.reg]
         elif mnem == 'RET':
             if on_RET:
                 on_RET(reg)
             break
-        elif (mnem == 'STP' or mnem == 'LDP') and insn.Op3.type == o_displ:
+        elif (mnem == 'STP' or mnem == 'LDP') and insn.Op3.type == idc.o_displ:
             if insn.auxpref & _MEMOP_WBINDEX:
                 reg[insn.Op3.reg] = reg[insn.Op3.reg] + insn.Op3.addr
             if mnem == 'LDP':
@@ -116,11 +115,11 @@ def _emulate_arm64(start, end, on_BL=None, on_RET=None):
                 reg.clear(insn.Op2.reg)
         elif (mnem == 'STR' or mnem == 'LDR') and not insn.auxpref & _MEMOP_WBINDEX:
             if mnem == 'LDR':
-                if insn.Op2.type == o_displ:
+                if insn.Op2.type == idc.o_displ:
                     reg[insn.Op1.reg] = load(reg[insn.Op2.reg] + insn.Op2.addr, insn.Op1.dtyp)
                 else:
                     reg.clear(insn.Op1.reg)
-        elif mnem == 'BL' and insn.Op1.type == o_near:
+        elif mnem == 'BL' and insn.Op1.type == idc.o_near:
             if on_BL:
                 on_BL(insn.Op1.addr, reg)
             cleartemps()
@@ -180,33 +179,37 @@ class ClassInfo(object):
         self.meta_superclass = meta_superclass
 
     def __repr__(self):
-        return 'ClassInfo({!r}, {:#x}, {:#x}, {}, {!r}, {:#x})' \
-                .format(self.classname, self.metaclass, self.vtable, self.class_size,
-                        self.superclass_name, self.meta_superclass)
+        def hex(x):
+            if x is None:
+                return repr(None)
+            return '{:#x}'.format(x)
+        return 'ClassInfo({!r}, {}, {}, {}, {!r}, {})'.format(
+                self.classname, hex(self.metaclass), hex(self.vtable),
+                self.class_size, self.superclass_name, hex(self.meta_superclass))
 
 def _process_mod_init_func_for_metaclasses(func, found_metaclass):
     """Process a function from the __mod_init_func section for OSMetaClass information.
 
     Internal use only.
     """
-    _log(4, 'Processing function {}', GetFunctionName(func))
+    _log(4, 'Processing function {}', idc.GetFunctionName(func))
     def on_BL(addr, reg):
         X0, X1, X3 = reg['X0'], reg['X1'], reg['X3']
         if not (X0 and X1 and X3):
             return
         _log(5, 'Have call to {:#x}({:#x}, {:#x}, ?, {:#x})', addr, X0, X1, X3)
         # OSMetaClass::OSMetaClass(this, className, superclass, classSize)
-        if not SegName(X1).endswith(":__cstring") or not SegName(X0):
+        if not idc.SegName(X1).endswith(":__cstring") or not idc.SegName(X0):
             return
-        found_metaclass(X0, GetString(X1), X3, reg['X2'] or None)
-    _emulate_arm64(func, FindFuncEnd(func), on_BL=on_BL)
+        found_metaclass(X0, idc.GetString(X1), X3, reg['X2'] or None)
+    _emulate_arm64(func, idc.FindFuncEnd(func), on_BL=on_BL)
 
 def _process_mod_init_func_section_for_metaclasses(segstart, found_metaclass):
     """Process a __mod_init_func section for OSMetaClass information.
 
     Internal use only.
     """
-    segend = SegEnd(segstart)
+    segend = idc.SegEnd(segstart)
     for func in ReadWords(segstart, segend):
         _process_mod_init_func_for_metaclasses(func, found_metaclass)
 
@@ -223,8 +226,8 @@ def _collect_metaclasses():
         metaclass_to_classname_builder.add_link(metaclass, classname)
         metaclass_to_class_size[metaclass]      = class_size
         metaclass_to_meta_superclass[metaclass] = meta_superclass
-    for ea in Segments():
-        segname = SegName(ea)
+    for ea in idautils.Segments():
+        segname = idc.SegName(ea)
         if not segname.endswith(':__mod_init_func'):
             continue
         _log(2, 'Processing segment {}', segname)
@@ -270,7 +273,7 @@ def _process_const_section_for_vtables(segstart, metaclass_info, found_vtable):
 
     Internal use only.
     """
-    segend = SegEnd(segstart)
+    segend = idc.SegEnd(segstart)
     addr = segstart
     while addr < segend:
         possible, length = kernelcache_vtable_length(addr, segend, scan=True)
@@ -290,8 +293,8 @@ def _collect_vtables(metaclass_info):
     metaclass_to_vtable_builder = _OneToOneMapFactory()
     def found_vtable(metaclass, vtable):
         metaclass_to_vtable_builder.add_link(metaclass, vtable)
-    for ea in Segments():
-        segname = SegName(ea)
+    for ea in idautils.Segments():
+        segname = idc.SegName(ea)
         # Unfortunately, I cannot find a way to distinguish between __TEXT.__const and
         # __DATA_CONST.__const. This is a hack but it works OK.
         if not segname.endswith(':__const'):
@@ -348,7 +351,7 @@ def _collect_class_info():
     _log(1, 'Done')
     return class_info
 
-kernelcache_class_info = None
+kernelcache_class_info = dict()
 """A global map from class names to ClassInfo objects. See kernelcache_collect_class_info()."""
 
 def kernelcache_collect_class_info():
@@ -358,9 +361,10 @@ def kernelcache_collect_class_info():
     in it. It returns a dictionary that maps the C++ class names to a ClassInfo object containing
     metainformation about the class.
 
-    The result of this function call is cached in the kernelcache_class_info global variable. If
-    this variable is set, this function will return its value rather than re-examining the
-    kernelcache. To force re-evaluation of this function, clear kernelcache_class_info.
+    The result of this function call is cached in the kernelcache_class_info global dictionary. If
+    this dictionary is nonempty, this function will return its value rather than re-examining the
+    kernelcache. To force re-evaluation of this function, clear the kernelcache_class_info
+    dictionary with kernelcache_class_info.clear().
 
     Only Arm64 is supported at this time.
 
@@ -368,6 +372,6 @@ def kernelcache_collect_class_info():
     """
     global kernelcache_class_info
     if not kernelcache_class_info:
-        kernelcache_class_info = _collect_class_info()
+        kernelcache_class_info.update(_collect_class_info())
     return kernelcache_class_info
 

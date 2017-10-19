@@ -2,10 +2,10 @@
 # kernelcache_vtable_utilities.py
 # Brandon Azad
 #
+# Utility functions for dealing with virtual method tables.
+#
 
-from idc import OpOff, SegEnd
-
-from ida_utilities import WORD_SIZE, Addresses, ReadWords, iterlen
+from ida_utilities import (idc, WORD_SIZE, Addresses, ReadWords, iterlen)
 
 from itertools import islice, takewhile
 
@@ -30,7 +30,7 @@ def kernelcache_vtable_length(ea, end=None, scan=False):
     data that can be skipped, reducing duplication of effort between subsequent calls.
     """
     if end is None:
-        end = SegEnd(ea)
+        end = idc.SegEnd(ea)
     words = ReadWords(ea, end)
     # Iterate through the first VTABLE_OFFSET words. If any of them are nonzero, then we can skip
     # past all the words we just saw.
@@ -75,7 +75,7 @@ def kernelcache_convert_vtable_to_offsets(vtable):
         return False
     successful = True
     for address in Addresses(vtable, length=length, step=WORD_SIZE):
-        if not OpOff(address, 0, 0):
+        if not idc.OpOff(address, 0, 0):
             _log(0, 'Could not change address {:#x} into an offset', address)
             successful = False
     return successful

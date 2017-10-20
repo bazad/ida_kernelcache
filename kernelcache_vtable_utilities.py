@@ -5,13 +5,9 @@
 # Utility functions for dealing with virtual method tables.
 #
 
-from ida_utilities import (idc, WORD_SIZE, Addresses, ReadWords, iterlen)
+from ida_utilities import *
 
 from itertools import islice, takewhile
-
-VTABLE_OFFSET      =  2
-MIN_VTABLE_METHODS = 12
-MIN_VTABLE_LENGTH  = VTABLE_OFFSET + MIN_VTABLE_METHODS
 
 _log_level = 0
 
@@ -19,15 +15,33 @@ def _log(level, fmt, *args):
     if level <= _log_level:
         print 'kernelcache_vtable_utilities: ' + fmt.format(*args)
 
-def kernelcache_vtable_length(ea, end=None, scan=False):
-    """Checks whether the effective address could correspond to a virtual method table.
+VTABLE_OFFSET      =  2
+"""The first few entries of the virtual method tables in the kernelcache are empty."""
+MIN_VTABLE_METHODS = 12
+"""The minimum number of methods in a virtual method table."""
+MIN_VTABLE_LENGTH  = VTABLE_OFFSET + MIN_VTABLE_METHODS
+"""The minimum length of a virtual method table in words, including the initial empty entries."""
 
-    If the given virtual address could be a vtable, it returns True and the length of the vtable in
-    words (including the initial zero entries). If the given virtual address is definitely not a
-    vtable, then it returns False and the number of words that can be skipped in searching for the
-    next vtable. As a slight optimization when using this function to scan for vtables, setting
-    scan to True will cause this function to look ahead in some cases to increase the amount of
-    data that can be skipped, reducing duplication of effort between subsequent calls.
+def kernelcache_vtable_length(ea, end=None, scan=False):
+    """Find the length of a virtual method table.
+
+    This function checks whether the effective address could correspond to a virtual method table
+    and returns its length.
+
+    Arguments:
+        ea: The linear address of the start of the vtable.
+
+    Options:
+        end: The end address to search through. Defaults to the end of the section.
+        scan: As a slight optimization when using this function to scan for vtables, setting scan
+            to True will cause this function to look ahead in some cases to increase the amount of
+            data that can be skipped, reducing duplication of effort between subsequent calls.
+
+    Returns:
+        A tuple (possible, length). If the address could correspond to the start of a vtable, then
+        possible is True and length is the length of the vtable in words. Otherwise, if the address
+        is definitely not the start of a vtable, then possible is False and length is the number of
+        words that can be skipped when searching for the next vtable.
     """
     if end is None:
         end = idc.SegEnd(ea)
@@ -38,13 +52,19 @@ def kernelcache_vtable_length(ea, end=None, scan=False):
         if word != 0:
             return False, idx + 1
     # Now this first word after the padding section is special.
-    if next(words, None) is None:
+    first = next(words, None)
+    if first is None:
+        # We have 2 zeros followed by the end of our range.
+        return False, 2
+    elif first == 0:
         # We have VTABLE_OFFSET + 1 zero entries.
         zeros = VTABLE_OFFSET + 1
         if scan:
             # To avoid re-reading the data we just read in the case of a zero-filled section, let's
             # look ahead a bit until we find the first non-zero value.
             for word in words:
+                if word is None:
+                    return False, zeros
                 if word != 0:
                     break
                 zeros += 1
@@ -53,6 +73,7 @@ def kernelcache_vtable_length(ea, end=None, scan=False):
                 return False, zeros
         # We can skip all but the last VTABLE_OFFSET zeros.
         return False, zeros - VTABLE_OFFSET
+    # TODO: We should verify that all vtable entries refer to code.
     # Now we know that we have at least one nonzero value, our job is easier. Get the full length
     # of the vtable, including the first VTABLE_OFFSET entries and the subsequent nonzero entries,
     # until either we find a zero word (not included) or run out of words in the stream.

@@ -21,7 +21,10 @@ from kernelcache_metaclass_symbols import (kernelcache_metaclass_name_for_class,
         kernelcache_add_metaclass_symbol, kernelcache_add_metaclass_symbols)
 
 from kernelcache_stubs import (kernelcache_offset_name_target, kernelcache_stub_name_target,
-        kernelcache_stub_target, kernelcache_symbolicate_offsets, kernelcache_symbolicate_stubs)
+        kernelcache_symbol_references_stub, kernelcache_stub_target,
+        kernelcache_symbolicate_offsets, kernelcache_symbolicate_stubs)
+
+from kernelcache_vtable_methods import (kernelcache_vtable_overrides)
 
 def kernelcache_process():
     """Process the kernelcache in IDA.

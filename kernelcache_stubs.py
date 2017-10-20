@@ -48,6 +48,10 @@ def kernelcache_stub_name_target(stub_name):
         return None
     return match.group(1)
 
+def kernelcache_symbol_references_stub(symbol_name):
+    """Check if the symbol name references a stub."""
+    return kernelcache_stub_suffix in symbol_name
+
 def _process_offset(offset, ea, next_offset):
     """Process an offset in a __got section."""
     # Convert the address containing the offset into an offset in IDA, but continue if it fails.
@@ -60,7 +64,7 @@ def _process_offset(offset, ea, next_offset):
         return False
     # Make sure this isn't an offset to another stub or to a jump function to another stub. See the
     # comment in _symbolicate_stub.
-    if kernelcache_stub_suffix in name:
+    if kernelcache_symbol_references_stub(name):
         _log(1, 'Offset at address {:#x} has target {:#x} (name {}) that references a stub', ea,
                 offset, name)
         return False
@@ -180,7 +184,7 @@ def _symbolicate_stub(stub, target, next_stub):
     # extract the inner stub reference is that these jump functions are really wrappers with
     # different names and semantics in the original code, so it's not appropriate for us to cover
     # that up with a stub.
-    if kernelcache_stub_suffix in name:
+    if kernelcache_symbol_references_stub(name):
         _log(1, 'Stub {:#x} has target {:#x} (name {}) that references another stub', stub, target,
                 name)
         return False

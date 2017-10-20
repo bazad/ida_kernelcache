@@ -13,8 +13,11 @@ from kernelcache_vtable_utilities import (VTABLE_OFFSET, kernelcache_vtable_leng
 
 _log_level = 1
 
+def _log_ok(level):
+    return level <= _log_level
+
 def _log(level, fmt, *args):
-    if level <= _log_level:
+    if _log_ok(level):
         print 'kernelcache_class_info: ' + fmt.format(*args)
 
 # IDK where IDA defines these.
@@ -163,6 +166,7 @@ class ClassInfo(object):
     """Information about a C++ class in a kernelcache."""
 
     def __init__(self, classname, metaclass, vtable, class_size, superclass_name, meta_superclass):
+        self.superclass      = None
         self.classname       = classname
         self.metaclass       = metaclass
         self.vtable          = vtable
@@ -288,11 +292,23 @@ def _collect_vtables(metaclass_info):
         mcinfo = ['{:#x} ({})'.format(mc, metaclass_info[mc].classname) for mc in metaclasses]
         _log(0, 'Vtable {:#x} has multiple metaclasses: {}', vtable, ', '.join(mcinfo))
     metaclass_to_vtable = metaclass_to_vtable_builder.build(bad_metaclass, bad_vtable)
+    # Print a list of the metaclasses that have been eliminated.
+    if _log_ok(1):
+        original  = set(metaclass_info.keys())
+        remaining = set(metaclass_to_vtable.keys())
+        _log(1, 'Eliminated classes:')
+        for metaclass in original.difference(remaining):
+            _log(1, '\t{:#x}  {}', metaclass, metaclass_info[metaclass].classname)
     # The resulting mapping may have fewer metaclasses than metaclass_info.
     class_info = dict()
     for metaclass, vtable in metaclass_to_vtable.items():
         classinfo = metaclass_info[metaclass]
+        # Add the vtable, which we didn't have earlier.
         classinfo.vtable = vtable
+        # If this class's superclass is still live, set its superclass field. This is safe since
+        # this is the last filtering operation.
+        if classinfo.meta_superclass in metaclass_to_vtable:
+            classinfo.superclass = metaclass_info[classinfo.meta_superclass]
         class_info[classinfo.classname] = classinfo
     return class_info
 

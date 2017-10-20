@@ -7,9 +7,13 @@
 
 from ida_utilities import *
 
+import re
+
 from kernelcache_class_info import kernelcache_collect_class_info
 from kernelcache_vtable_utilities import (kernelcache_vtable_length,
         kernelcache_convert_vtable_to_offsets)
+from kernelcache_vtable_methods import kernelcache_vtable_overrides
+from kernelcache_stubs import kernelcache_symbol_references_stub
 
 _log_level = 1
 
@@ -37,6 +41,30 @@ def kernelcache_vtable_symbol_for_class(classname):
     if len(scopes) > 1:
         symbol += 'E'
     return symbol
+
+def _extract_base_class_from_vtable_method_symbol(method_symbol):
+    """Get the base class in a vtable method symbol."""
+    match = re.search(r"\d+", method_symbol)
+    if not match:
+        return None
+    length = int(match.group(0))
+    start = match.end()
+    classname = method_symbol[start:start+length]
+    if len(classname) != length:
+        return None
+    return classname
+
+def _kernelcache_vtable_method_symbol_substitute_class(method_symbol, new_class, old_class=None):
+    """Create a new method symbol by substituting the class to which the method belongs."""
+    if not old_class:
+        old_class = _extract_base_class_from_vtable_method_symbol(method_symbol)
+        if not old_class:
+            return None
+    old_class_part = '{}{}'.format(len(old_class), old_class)
+    new_class_part = '{}{}'.format(len(new_class), new_class)
+    if old_class_part not in method_symbol:
+        return None
+    return method_symbol.replace(old_class_part, new_class_part, 1)
 
 def kernelcache_add_vtable_symbol(vtable, classname, make_offsets=True):
     """Add a symbol for the virtual method table at the specified address.
@@ -72,4 +100,55 @@ def kernelcache_add_vtable_symbols():
                         classinfo.vtable)
         else:
             _log(0, 'Class {} has no known vtable', classname)
+
+_ignore_vtable_methods = (
+    '___cxa_pure_virtual'
+)
+
+def _bad_name_dont_use_as_override(name):
+    """Some names shouldn't propagate into vtable symbols."""
+    # Ignore jumps and stubs and fixed known special values.
+    return (name.startswith('j_') or kernelcache_symbol_references_stub(name)
+            or name in _ignore_vtable_methods)
+
+def _symbolicate_overrides_for_classinfo(classinfo, processed):
+    """A recursive function to symbolicate vtable overrides for a class and its superclasses."""
+    # If we've already been processed, stop.
+    if classinfo in processed:
+        return
+    # First propagate symbol information to our superclass.
+    if classinfo.superclass:
+        _symbolicate_overrides_for_classinfo(classinfo.superclass, processed)
+    # Now symbolicate the superclass.
+    for _, override, original in kernelcache_vtable_overrides(classinfo.classname, methods=True):
+        # Skip this method if the override already has a name or the original does not have a name.
+        override_name = get_ea_name(override, username=True)
+        if override_name:
+            continue
+        original_name = get_ea_name(original, username=True)
+        if not original_name or _bad_name_dont_use_as_override(original_name):
+            continue
+        # Get the new override name if we substitute for the override class's name.
+        override_name = _kernelcache_vtable_method_symbol_substitute_class(original_name,
+                classinfo.classname)
+        if not override_name:
+            _log(0, 'Could not substitute class {} into method symbol {} for override {:#x}',
+                    classinfo.classname, original_name, override)
+            continue
+        # Now that we have the new name, set it.
+        # TODO
+        _log(0, 'Would override {:#x} :  {} <- {}', override, override_name, original_name)
+        #if not set_ea_name(override, override_name):
+        #    _log(0, 'Could not set name {} for method {:#x}', override_name, override)
+    # We're done.
+    processed.add(classinfo)
+
+def kernelcache_symbolicate_vtable_overrides():
+    """Symbolicate overridden methods in a virtual method table.
+
+    Propagate symbol names from the virtual method tables of the base classes."""
+    processed = set()
+    class_info_map = kernelcache_collect_class_info()
+    for classinfo in class_info_map.values():
+        _symbolicate_overrides_for_classinfo(classinfo, processed)
 

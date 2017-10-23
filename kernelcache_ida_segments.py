@@ -9,11 +9,7 @@ from ida_utilities import *
 
 from kplist import kplist_parse
 
-_log_level = 0
-
-def _log(level, fmt, *args):
-    if level <= _log_level:
-        print 'kernelcache_ida_segments: ' + fmt.format(*args)
+_log = make_log(0, 'kernelcache_ida_segments')
 
 def kernelcache_find_kernel_base():
     """Find the kernel base (the address of the main kernel Mach-O header)."""

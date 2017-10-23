@@ -15,11 +15,7 @@ from kernelcache_vtable_utilities import (kernelcache_vtable_length,
 from kernelcache_vtable_methods import kernelcache_vtable_overrides
 from kernelcache_stubs import kernelcache_symbol_references_stub
 
-_log_level = 1
-
-def _log(level, fmt, *args):
-    if level <= _log_level:
-        print 'kernelcache_vtable_symbols: ' + fmt.format(*args)
+_log = make_log(1, 'kernelcache_vtable_symbols')
 
 def kernelcache_vtable_symbol_for_class(classname):
     """Get the symbol name for the vtable for the given class name.

@@ -9,11 +9,7 @@ from ida_utilities import *
 
 from kernelcache_class_info import kernelcache_collect_class_info
 
-_log_level = 0
-
-def _log(level, fmt, *args):
-    if level <= _log_level:
-        print 'kernelcache_metaclass_symbols: ' + fmt.format(*args)
+_log = make_log(0, 'kernelcache_metaclass_symbols')
 
 def kernelcache_metaclass_name_for_class(classname):
     """Return the name of the C++ metaclass for the given class."""

@@ -9,11 +9,7 @@ from ida_utilities import *
 
 from itertools import islice, takewhile
 
-_log_level = 0
-
-def _log(level, fmt, *args):
-    if level <= _log_level:
-        print 'kernelcache_vtable_utilities: ' + fmt.format(*args)
+_log = make_log(0, 'kernelcache_vtable_utilities')
 
 VTABLE_OFFSET      =  2
 """The first few entries of the virtual method tables in the kernelcache are empty."""

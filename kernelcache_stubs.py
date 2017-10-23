@@ -10,11 +10,7 @@ from ida_utilities import *
 from collections import defaultdict
 import re
 
-_log_level = 1
-
-def _log(level, fmt, *args):
-    if level <= _log_level:
-        print 'kernelcache_stubs: ' + fmt.format(*args)
+_log = make_log(1, 'kernelcache_stubs')
 
 kernelcache_offset_suffix = '___offset_'
 """The suffix that gets appended to a symbol to create the offset name, without the offset ID."""

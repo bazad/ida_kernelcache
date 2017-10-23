@@ -11,6 +11,15 @@ import idaapi
 
 from collections import deque
 
+def make_log(log_level, module):
+    """Create a logging function."""
+    def log(level, *args):
+        if len(args) == 0:
+            return level <= log_level
+        if level <= log_level:
+            print module + ': ' + args[0].format(*args[1:])
+    return log
+
 WORD_SIZE = 0
 """The size of a word on the current platform."""
 

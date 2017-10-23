@@ -12,14 +12,7 @@ from collections import defaultdict
 from kernelcache_ida_segments import (kernelcache_kext)
 from kernelcache_vtable_utilities import (VTABLE_OFFSET, kernelcache_vtable_length)
 
-_log_level = 1
-
-def _log_ok(level):
-    return level <= _log_level
-
-def _log(level, fmt, *args):
-    if _log_ok(level):
-        print 'kernelcache_class_info: ' + fmt.format(*args)
+_log = make_log(1, 'kernelcache_class_info')
 
 # IDK where IDA defines these.
 _MEMOP_PREINDEX  = 0x20
@@ -295,7 +288,7 @@ def _collect_vtables(metaclass_info):
         _log(0, 'Vtable {:#x} has multiple metaclasses: {}', vtable, ', '.join(mcinfo))
     metaclass_to_vtable = metaclass_to_vtable_builder.build(bad_metaclass, bad_vtable)
     # Print a list of the metaclasses that have been eliminated.
-    if _log_ok(1):
+    if _log(1):
         original  = set(metaclass_info.keys())
         remaining = set(metaclass_to_vtable.keys())
         _log(1, 'Eliminated classes:')

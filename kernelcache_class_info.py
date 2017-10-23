@@ -192,7 +192,7 @@ def _process_mod_init_func_for_metaclasses(func, found_metaclass):
             return
         _log(5, 'Have call to {:#x}({:#x}, {:#x}, ?, {:#x})', addr, X0, X1, X3)
         # OSMetaClass::OSMetaClass(this, className, superclass, classSize)
-        if not idc.SegName(X1).endswith(":__cstring") or not idc.SegName(X0):
+        if not idc.SegName(X1).endswith("__TEXT.__cstring") or not idc.SegName(X0):
             return
         found_metaclass(X0, idc.GetString(X1), X3, reg['X2'] or None)
     _emulate_arm64(func, idc.FindFuncEnd(func), on_BL=on_BL)
@@ -215,7 +215,7 @@ def _collect_metaclasses():
         metaclass_to_meta_superclass[metaclass] = meta_superclass
     for ea in idautils.Segments():
         segname = idc.SegName(ea)
-        if not segname.endswith(':__mod_init_func'):
+        if not segname.endswith('__DATA_CONST.__mod_init_func'):
             continue
         _log(2, 'Processing segment {}', segname)
         _process_mod_init_func_section_for_metaclasses(ea, found_metaclass)
@@ -273,9 +273,7 @@ def _collect_vtables(metaclass_info):
         metaclass_to_vtable_builder.add_link(metaclass, vtable)
     for ea in idautils.Segments():
         segname = idc.SegName(ea)
-        # Unfortunately, I cannot find a way to distinguish between __TEXT.__const and
-        # __DATA_CONST.__const. This is a hack but it works OK.
-        if not segname.endswith(':__const'):
+        if not segname.endswith('__DATA_CONST.__const'):
             continue
         _log(2, 'Processing segment {}', segname)
         _process_const_section_for_vtables(ea, metaclass_info, found_vtable)

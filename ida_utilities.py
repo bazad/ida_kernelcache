@@ -274,6 +274,115 @@ def read_word(ea, wordsize=WORD_SIZE):
         return idc.Qword(ea)
     raise ValueError('Invalid argument: wordsize={}'.format(wordsize))
 
+class objectview(object):
+    """A class to present an object-like view of a dictionary."""
+    # https://goodcode.io/articles/python-dict-object/
+    def __init__(self, fields, addr, size):
+        self.__dict__ = fields
+        self.__addr   = addr
+        self.__size   = size
+    def __int__(self):
+        return self.__addr
+    def __len__(self):
+        return self.__size
+
+def _read_struct_member_once(ea, flags, size, member_sid, member_size, asobject):
+    """Read part of a struct member for _read_struct_member."""
+    if idc.isByte(flags):
+        return read_word(ea, 1), 1
+    elif idc.isWord(flags):
+        return read_word(ea, 2), 2
+    elif idc.isDwrd(flags):
+        return read_word(ea, 4), 4
+    elif idc.isQwrd(flags):
+        return read_word(ea, 8), 8
+    elif idc.isOwrd(flags):
+        return read_word(ea, 16), 16
+    elif idc.isASCII(flags):
+        return idc.GetManyBytes(ea, size), size
+    elif idc.isFloat(flags):
+        return idc.Float(ea), 4
+    elif idc.isDouble(flags):
+        return idc.Double(ea), 8
+    elif idc.isStruct(flags):
+        value = read_struct(ea, sid=member_sid, asobject=asobject)
+        return value, member_size
+    return None, size
+
+def _read_struct_member(struct, sid, union, ea, offset, name, size, asobject):
+    """Read a member into a struct for read_struct."""
+    flags = idc.GetMemberFlag(sid, offset)
+    assert flags != -1
+    # Extra information for parsing a struct.
+    member_sid, member_ssize = None, None
+    if idc.isStruct(flags):
+        member_sid = idc.GetMemberStrId(sid, offset)
+        member_ssize = idc.GetStrucSize(member_sid)
+    # Get the address of the start of the member.
+    member = ea
+    if not union:
+        member += offset
+    # Now parse out the value.
+    array = []
+    processed = 0
+    while processed < size:
+        value, read = _read_struct_member_once(member + processed, flags, size, member_sid,
+                member_ssize, asobject)
+        assert size % read == 0
+        array.append(value)
+        processed += read
+    if len(array) == 1:
+        value = array[0]
+    else:
+        value = array
+    struct[name] = value
+
+def read_struct(ea, struct=None, sid=None, members=None, asobject=False):
+    """Read a structure from the given address.
+
+    This function reads the structure at the given address and converts it into a dictionary or
+    accessor object.
+
+    Arguments:
+        ea: The linear address of the start of the structure.
+
+    Options:
+        sid: The structure ID of the structure type to read.
+        struct: The name of the structure type to read.
+        members: A list of the names of the member fields to read. If members is None, then all
+            members are read. Default is None.
+        asobject: If True, then the struct is returned as a Python object rather than a dict.
+
+    One of sid and struct must be specified.
+    """
+    # Handle sid/struct.
+    if struct is not None:
+        sid2 = idc.GetStrucIdByName(struct)
+        if sid2 == idc.BADADDR:
+            raise ValueError('Invalid struc name {}'.format(struct))
+        if sid is not None and sid2 != sid:
+            raise ValueError('Invalid arguments: sid={}, struct={}'.format(sid, struct))
+        sid = sid2
+    else:
+        if sid is None:
+            raise ValueError('Invalid arguments: sid={}, struct={}'.format(sid, struct))
+        if idc.GetStrucName(sid) is None:
+            raise ValueError('Invalid struc id {}'.format(sid))
+    # Iterate through the members and add them to the struct.
+    union = idc.IsUnion(sid)
+    struct = {}
+    for offset, name, size in idautils.StructMembers(sid):
+        if members is not None and name not in members:
+            continue
+        _read_struct_member(struct, sid, union, ea, offset, name, size, asobject)
+    if asobject:
+        struct = objectview(struct, ea, idc.GetStrucSize(sid))
+    return struct
+
+def null_terminated(string):
+    """Extract the NULL-terminated C string from the given array of bytes."""
+    return string.split('\0', 1)[0]
+
 def ReadWords(start, end, wordsize=WORD_SIZE, addresses=False):
     """A generator to iterate over the data words in the given address range.
 

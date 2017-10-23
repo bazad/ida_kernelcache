@@ -97,7 +97,7 @@ def kernelcache_symbolicate_offsets():
     next_offset = _make_generator(kernelcache_offset_suffix)
     for ea in idautils.Segments():
         segname = idc.SegName(ea)
-        if not segname.endswith(':__got'):
+        if not segname.endswith('.__got'):
             continue
         _log(2, 'Processing segment {}', segname)
         _process_offsets_section(ea, next_offset)
@@ -265,7 +265,7 @@ def kernelcache_symbolicate_stubs(make_thunk=True):
     next_stub = _make_generator(kernelcache_stub_suffix)
     for ea in idautils.Segments():
         segname = idc.SegName(ea)
-        if not segname.endswith(':__stubs'):
+        if not segname.endswith('.__stubs'):
             continue
         _log(3, 'Processing segment {}', segname)
         _process_stubs_section(ea, make_thunk, next_stub)

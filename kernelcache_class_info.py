@@ -9,6 +9,7 @@ from ida_utilities import *
 
 from collections import defaultdict
 
+from kernelcache_ida_segments import (kernelcache_kext)
 from kernelcache_vtable_utilities import (VTABLE_OFFSET, kernelcache_vtable_length)
 
 _log_level = 1
@@ -267,10 +268,13 @@ def _process_const_section_for_vtables(segstart, metaclass_info, found_vtable):
 
 def _collect_vtables(metaclass_info):
     """Use OSMetaClass information to search for virtual method tables."""
+    all_vtables = set()
     # Build a mapping from OSMetaClass instances to virtual method tables.
     metaclass_to_vtable_builder = _OneToOneMapFactory()
     def found_vtable(metaclass, vtable):
-        metaclass_to_vtable_builder.add_link(metaclass, vtable)
+        all_vtables.add(vtable)
+        if kernelcache_kext(metaclass) == kernelcache_kext(vtable):
+            metaclass_to_vtable_builder.add_link(metaclass, vtable)
     for ea in idautils.Segments():
         segname = idc.SegName(ea)
         if not segname.endswith('__DATA_CONST.__const'):
@@ -308,7 +312,7 @@ def _collect_vtables(metaclass_info):
         if classinfo.meta_superclass in metaclass_to_vtable:
             classinfo.superclass = metaclass_info[classinfo.meta_superclass]
         class_info[classinfo.classname] = classinfo
-    return class_info
+    return class_info, all_vtables
 
 def _check_filetype(filetype):
     """Checks that the filetype is compatible before trying to process it."""
@@ -319,22 +323,25 @@ def _collect_class_info():
     filetype = idaapi.get_file_type_name()
     if not _check_filetype(filetype):
         _log(-1, 'Bad file type "{}"', filetype)
-        return
+        return None
     _log(1, 'Collecting information about OSMetaClass instances')
     metaclass_info = _collect_metaclasses()
     if not metaclass_info:
         _log(-1, 'Could not collect OSMetaClass instances')
-        return
+        return None
     _log(1, 'Searching for virtual method tables')
-    class_info = _collect_vtables(metaclass_info)
+    class_info, all_vtables = _collect_vtables(metaclass_info)
     if not class_info:
         _log(-1, 'Could not collect virtual method tables')
-        return
+        return None
     _log(1, 'Done')
-    return class_info
+    return class_info, all_vtables
 
 kernelcache_class_info = dict()
 """A global map from class names to ClassInfo objects. See kernelcache_collect_class_info()."""
+
+kernelcache_vtables = set()
+"""A global set of all identified virtual method tables in the kernel."""
 
 def kernelcache_collect_class_info():
     """Collect information about C++ classes defined in a kernelcache.
@@ -348,12 +355,20 @@ def kernelcache_collect_class_info():
     kernelcache. To force re-evaluation of this function, clear the kernelcache_class_info
     dictionary with kernelcache_class_info.clear().
 
+    This function also collects the set of all virtual method tables identified in the kernelcache,
+    even if the corresponding class could not be identified. This set is stored in the
+    kernelcache_vtables set.
+
     Only Arm64 is supported at this time.
 
     Only top-level classes are processed. Information about nested classes is not collected.
     """
     global kernelcache_class_info
     if not kernelcache_class_info:
-        kernelcache_class_info.update(_collect_class_info())
+        result = _collect_class_info()
+        if result is not None:
+            class_info, all_vtables = result
+            kernelcache_class_info.update(class_info)
+            kernelcache_vtables.update(all_vtables)
     return kernelcache_class_info
 

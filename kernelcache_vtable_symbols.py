@@ -9,7 +9,7 @@ from ida_utilities import *
 
 import re
 
-from kernelcache_class_info import kernelcache_collect_class_info
+from kernelcache_class_info import (kernelcache_vtables, kernelcache_collect_class_info)
 from kernelcache_vtable_utilities import (kernelcache_vtable_length,
         kernelcache_convert_vtable_to_offsets)
 from kernelcache_vtable_methods import kernelcache_vtable_overrides
@@ -42,6 +42,42 @@ def kernelcache_vtable_symbol_for_class(classname):
         symbol += 'E'
     return symbol
 
+def kernelcache_add_vtable_symbol(vtable, classname):
+    """Add a symbol for the virtual method table at the specified address.
+
+    Arguments:
+        vtable: The address of the virtual method table.
+        classname: The name of the C++ class with this virtual method table.
+
+    Returns:
+        True if the data was successfully converted into a vtable and the symbol was added.
+    """
+    vtable_symbol = kernelcache_vtable_symbol_for_class(classname)
+    if not set_ea_name(vtable, vtable_symbol):
+        _log(0, 'Address {:#x} already has name {} instead of vtable symbol {}'
+                .format(vtable, get_ea_name(vtable), vtable_symbol))
+        return False
+    return True
+
+def kernelcache_add_vtable_symbols():
+    """Populate IDA with virtual method table information for an iOS kernelcache.
+
+    Search through the kernelcache for virtual method tables, convert each virtual method table
+    into a sequence of offsets, and add a symbol for each identified virtual method table.
+    """
+    class_info_map = kernelcache_collect_class_info()
+    for vtable in kernelcache_vtables:
+        if not kernelcache_convert_vtable_to_offsets(vtable):
+            _log(0, 'Could not convert vtable at address {:x} into offsets', vtable)
+    for classname, classinfo in class_info_map.items():
+        if classinfo.vtable:
+            _log(3, 'Class {} has vtable at {:#x}', classname, classinfo.vtable)
+            if not kernelcache_add_vtable_symbol(classinfo.vtable, classname):
+                _log(0, 'Could not add vtable symbol for class {} at address {:#x}', classname,
+                        classinfo.vtable)
+        else:
+            _log(0, 'Class {} has no known vtable', classname)
+
 def _extract_base_class_from_vtable_method_symbol(method_symbol):
     """Get the base class in a vtable method symbol."""
     match = re.search(r"\d+", method_symbol)
@@ -65,41 +101,6 @@ def _kernelcache_vtable_method_symbol_substitute_class(method_symbol, new_class,
     if old_class_part not in method_symbol:
         return None
     return method_symbol.replace(old_class_part, new_class_part, 1)
-
-def kernelcache_add_vtable_symbol(vtable, classname, make_offsets=True):
-    """Add a symbol for the virtual method table at the specified address.
-
-    Arguments:
-        vtable: The address of the virtual method table.
-        classname: The name of the C++ class with this virtual method table.
-
-    Returns:
-        True if the data was successfully converted into a vtable and the symbol was added.
-    """
-    if make_offsets and not kernelcache_convert_vtable_to_offsets(vtable):
-        return False
-    vtable_symbol = kernelcache_vtable_symbol_for_class(classname)
-    if not set_ea_name(vtable, vtable_symbol):
-        _log(0, 'Address {:#x} already has name {} instead of vtable symbol {}'
-                .format(vtable, get_ea_name(vtable), vtable_symbol))
-        return False
-    return True
-
-def kernelcache_add_vtable_symbols():
-    """Populate IDA with virtual method table information for an iOS kernelcache.
-
-    Search through the kernelcache for virtual method tables, convert each identified virtual
-    method table into a sequence of offsets, and add a symbol for each virtual method table.
-    """
-    class_info_map = kernelcache_collect_class_info()
-    for classname, classinfo in class_info_map.items():
-        if classinfo.vtable:
-            _log(3, 'Class {} has vtable at {:#x}', classname, classinfo.vtable)
-            if not kernelcache_add_vtable_symbol(classinfo.vtable, classname):
-                _log(0, 'Could not add vtable for class {} at address {:#x}', classname,
-                        classinfo.vtable)
-        else:
-            _log(0, 'Class {} has no known vtable', classname)
 
 _ignore_vtable_methods = (
     '___cxa_pure_virtual'

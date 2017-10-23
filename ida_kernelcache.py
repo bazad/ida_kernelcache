@@ -12,10 +12,12 @@ from kplist import (kplist_parse)
 from kernelcache_ida_segments import (kernelcache_kernel_base, kernelcache_initialize_segments,
         kernelcache_kext)
 
+from kernelcache_offsets import (kernelcache_data_offsets)
+
 from kernelcache_vtable_utilities import (VTABLE_OFFSET, kernelcache_vtable_length,
         kernelcache_convert_vtable_to_offsets)
 
-from kernelcache_class_info import (ClassInfo, kernelcache_class_info,
+from kernelcache_class_info import (ClassInfo, kernelcache_class_info, kernelcache_vtables,
         kernelcache_collect_class_info)
 
 from kernelcache_vtable_symbols import (kernelcache_vtable_symbol_for_class,
@@ -48,6 +50,8 @@ def kernelcache_process():
     # NOTE: Renaming the segments in IDA via kernelcache_initialize_segments() is necessary for
     # some of the other functions, which rely on the more detailed segment names.
     kernelcache_initialize_segments()
+    kernelcache_data_offsets()
+    autoanalyze()
     kernelcache_add_vtable_symbols()
     autoanalyze()
     kernelcache_add_metaclass_symbols()

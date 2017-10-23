@@ -97,7 +97,7 @@ def kernelcache_symbolicate_offsets():
     next_offset = _make_generator(kernelcache_offset_suffix)
     for ea in idautils.Segments():
         segname = idc.SegName(ea)
-        if not segname.endswith('.__got'):
+        if not segname.endswith('__got'):
             continue
         _log(2, 'Processing segment {}', segname)
         _process_offsets_section(ea, next_offset)
@@ -139,35 +139,57 @@ def kernelcache_stub_target(stub_func):
         except:
             pass
 
-def all_xrefs_are_jumps(ea):
-    """Check if all xrefs to a linear address are of type Code_Near_Jump."""
-    return all(xref.type == idc.fl_JN for xref in idautils.XrefsTo(ea))
-
-def _convert_chunk_to_function(func):
-    """Convert code that IDA has classified as a function chunk into a proper function."""
-    idc.RemoveFchunk(func, func)
-    return idc.MakeFunction(func) != 0
+def _convert_address_to_function(func):
+    """Convert an address that IDA has classified incorrectly into a proper function."""
+    # If everything goes wrong, we'll try to restore this function.
+    orig = idc.FirstFuncFchunk(func)
+    # If the address is not code, let's undefine whatever it is.
+    if not idc.isCode(idc.GetFlags(func)):
+        item    = idc.ItemHead(func)
+        itemend = idc.ItemEnd(func)
+        if item != idc.BADADDR:
+            _log(0, 'Undefining item at {:x}', item)
+            idc.MakeUnkn(item, idc.DOUNK_EXPAND)
+            idc.MakeCode(func)
+            # Give IDA a chance to analyze the new code or else we won't be able to create a
+            # function.
+            idc.Wait()
+            idc.AnalyseArea(item, itemend)
+    else:
+        # Just try removing the chunk from its current function.
+        idc.RemoveFchunk(func, func)
+    # Now try making a function.
+    if idc.MakeFunction(func) != 0:
+        return True
+    # This is a stubborn chunk. Try recording the list of chunks, deleting the original function,
+    # creating the new function, then re-creating the original function.
+    if orig != idc.BADADDR:
+        chunks = list(idautils.Chunks(orig))
+        if idc.DelFunction(orig) != 0:
+            # Ok, now let's create the new function, and recreate the original.
+            if idc.MakeFunction(func) != 0:
+                if idc.MakeFunction(orig) != 0:
+                    # Ok, so we created the functions! Now, if any of the original chunks are not
+                    # contained in a function, we'll abort and undo.
+                    if all(idaapi.get_func(start) for start, end in chunks):
+                        return True
+            # Try to undo the damage.
+            for start, _ in chunks:
+                idc.DelFunction(start)
+        # Try to fix the original function.
+        _log(0, 'Trying to restore original function {:x}', orig)
+        idc.MakeFunction(orig)
+    return False
 
 def _is_function_start(ea):
     """Return True if the address is the start of a function."""
     return idc.GetFunctionAttr(ea, idc.FUNCATTR_START) == ea
 
-def _ensure_stub_is_function(stub):
-    """Ensure that the given stub is a function type, converting it if necessary."""
-    # If it's already a function, we're good.
-    if _is_function_start(stub):
+def _ensure_address_is_function(addr):
+    """Ensure that the given address is a function type, converting it if necessary."""
+    if _is_function_start(addr):
         return True
-    # Otherwise, make sure all xrefs are jumps, and then convert.
-    if all_xrefs_are_jumps(stub):
-        return _convert_chunk_to_function(stub)
-    return False
-
-def _ensure_target_is_function(target):
-    """Ensure that the given target is a function type, converting it if necessary."""
-    # If it's already a function, we're good.
-    if _is_function_start(target):
-        return True
-    return idc.MakeFunction(target) != 0
+    return _convert_address_to_function(addr)
 
 def _symbolicate_stub(stub, target, next_stub):
     """Set a symbol for a stub function."""
@@ -206,20 +228,24 @@ def _process_possible_stub(stub, make_thunk, next_stub):
         return False
     # Next, check if IDA sees this as a function chunk rather than a function, and correct it if
     # reasonable.
-    if not _ensure_stub_is_function(stub):
+    if not _ensure_address_is_function(stub):
         _log(1, 'Could not convert stub to function at {:#x}', stub)
         return False
-    # Next, make the stub a thunk if that was requested.
+    # Next, set the appropriate flags on the stub. Make the stub a thunk if that was requested.
+    flags = idc.GetFunctionFlags(stub)
+    if flags == -1:
+        _log(1, 'Could not get function flags for stub at {:#x}', stub)
+        return False
+    target_flags = idc.GetFunctionFlags(target)
+    if target_flags != -1 and target_flags & idc.FUNC_NORET:
+        flags |= idc.FUNC_NORET
     if make_thunk:
-        flags = idc.GetFunctionFlags(stub)
-        if flags == -1:
-            _log(1, 'Could not get function flags for stub at {:#x}', stub)
-            return False
-        if idc.SetFunctionFlags(stub, flags | idc.FUNC_THUNK) == 0:
-            _log(1, 'Could not set function flags for stub at {:#x}', stub)
-            return False
+        flags |= idc.FUNC_THUNK
+    if idc.SetFunctionFlags(stub, flags | idc.FUNC_THUNK) == 0:
+        _log(1, 'Could not set function flags for stub at {:#x}', stub)
+        return False
     # Next, ensure that IDA sees the target as a function, but continue anyway if that fails.
-    if not _ensure_target_is_function(target):
+    if not _ensure_address_is_function(target):
         _log(1, 'Stub {:#x} has target {:#x} that is not a function', stub, target)
     # Finally symbolicate the stub.
     if not _symbolicate_stub(stub, target, next_stub):
@@ -265,7 +291,7 @@ def kernelcache_symbolicate_stubs(make_thunk=True):
     next_stub = _make_generator(kernelcache_stub_suffix)
     for ea in idautils.Segments():
         segname = idc.SegName(ea)
-        if not segname.endswith('.__stubs'):
+        if not segname.endswith('__stubs'):
             continue
         _log(3, 'Processing segment {}', segname)
         _process_stubs_section(ea, make_thunk, next_stub)

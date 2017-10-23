@@ -106,6 +106,10 @@ _ignore_vtable_methods = (
     '___cxa_pure_virtual'
 )
 
+def _ok_to_rename_method(override, name):
+    """Some method names are ok to rename."""
+    return (name.startswith('j_') and iterlen(idautils.XrefsTo(override)) == 1)
+
 def _bad_name_dont_use_as_override(name):
     """Some names shouldn't propagate into vtable symbols."""
     # Ignore jumps and stubs and fixed known special values.
@@ -122,23 +126,26 @@ def _symbolicate_overrides_for_classinfo(classinfo, processed):
         _symbolicate_overrides_for_classinfo(classinfo.superclass, processed)
     # Now symbolicate the superclass.
     for _, override, original in kernelcache_vtable_overrides(classinfo.classname, methods=True):
-        # Skip this method if the override already has a name or the original does not have a name.
+        # Skip this method if the override already has a name and we can't rename it.
         override_name = get_ea_name(override, username=True)
-        if override_name:
+        if override_name and not _ok_to_rename_method(override, override_name):
             continue
+        # Skip this method if the original does not have a name or if it's a bad name.
         original_name = get_ea_name(original, username=True)
         if not original_name or _bad_name_dont_use_as_override(original_name):
             continue
         # Get the new override name if we substitute for the override class's name.
-        override_name = _kernelcache_vtable_method_symbol_substitute_class(original_name,
+        new_name = _kernelcache_vtable_method_symbol_substitute_class(original_name,
                 classinfo.classname)
-        if not override_name:
+        if not new_name:
             _log(0, 'Could not substitute class {} into method symbol {} for override {:#x}',
                     classinfo.classname, original_name, override)
             continue
         # Now that we have the new name, set it.
-        if not set_ea_name(override, override_name):
-            _log(0, 'Could not set name {} for method {:#x}', override_name, override)
+        if override_name:
+            _log(2, 'Renaming {} -> {}', override_name, new_name)
+        if not set_ea_name(override, new_name, rename=True):
+            _log(0, 'Could not set name {} for method {:#x}', new_name, override)
     # We're done.
     processed.add(classinfo)
 

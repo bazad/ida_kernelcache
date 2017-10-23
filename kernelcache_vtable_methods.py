@@ -26,17 +26,17 @@ def kernelcache_vtable_overrides(classname, new=False, methods=False):
     """
     class_info_map = kernelcache_collect_class_info()
     # Get the vtable for the class.
-    class_info = class_info_map[classname]
-    if not class_info.superclass_name:
+    classinfo = class_info_map[classname]
+    if not classinfo.superclass:
         return
-    class_vtable = class_info.vtable
+    class_vtable = classinfo.vtable
     possible, class_vtable_length = kernelcache_vtable_length(class_vtable)
     assert possible, 'Class {} has invalid vtable {:#x}'.format(classname, class_vtable)
     # Get the vtable for the superclass.
-    super_info = class_info_map[class_info.superclass_name]
-    super_vtable = super_info.vtable
+    superinfo = classinfo.superclass
+    super_vtable = superinfo.vtable
     possible, super_vtable_length = kernelcache_vtable_length(super_vtable)
-    assert possible, 'Class {} has invalid vtable {:#x}'.format(super_info.classname, super_vtable)
+    assert possible, 'Class {} has invalid vtable {:#x}'.format(superinfo.classname, super_vtable)
     assert class_vtable_length >= super_vtable_length
     # How many methods are we iterating over?
     nmethods = super_vtable_length

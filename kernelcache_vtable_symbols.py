@@ -137,10 +137,8 @@ def _symbolicate_overrides_for_classinfo(classinfo, processed):
                     classinfo.classname, original_name, override)
             continue
         # Now that we have the new name, set it.
-        # TODO
-        _log(0, 'Would override {:#x} :  {} <- {}', override, override_name, original_name)
-        #if not set_ea_name(override, override_name):
-        #    _log(0, 'Could not set name {} for method {:#x}', override_name, override)
+        if not set_ea_name(override, override_name):
+            _log(0, 'Could not set name {} for method {:#x}', override_name, override)
     # We're done.
     processed.add(classinfo)
 

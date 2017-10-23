@@ -20,8 +20,11 @@ from kernelcache_vtable_utilities import (VTABLE_OFFSET, kernelcache_vtable_leng
 from kernelcache_class_info import (ClassInfo, kernelcache_class_info, kernelcache_vtables,
         kernelcache_collect_class_info)
 
+from kernelcache_vtable_methods import (kernelcache_vtable_overrides)
+
 from kernelcache_vtable_symbols import (kernelcache_vtable_symbol_for_class,
-        kernelcache_add_vtable_symbol, kernelcache_add_vtable_symbols)
+        kernelcache_add_vtable_symbol, kernelcache_add_vtable_symbols,
+        kernelcache_symbolicate_vtable_overrides)
 
 from kernelcache_metaclass_symbols import (kernelcache_metaclass_name_for_class,
         kernelcache_metaclass_instance_name_for_class, kernelcache_metaclass_symbol_for_class,
@@ -30,8 +33,6 @@ from kernelcache_metaclass_symbols import (kernelcache_metaclass_name_for_class,
 from kernelcache_stubs import (kernelcache_offset_name_target, kernelcache_stub_name_target,
         kernelcache_symbol_references_stub, kernelcache_stub_target,
         kernelcache_symbolicate_offsets, kernelcache_symbolicate_stubs)
-
-from kernelcache_vtable_methods import (kernelcache_vtable_overrides)
 
 def kernelcache_process():
     """Process the kernelcache in IDA.
@@ -42,6 +43,7 @@ def kernelcache_process():
         * Locates OSMetaClass instances for top-level classes and adds OSMetaClass symbols.
         * Converts __got sections into offsets and automatically renames them.
         * Converts __stubs sections into stub functions and automatically renames them.
+        * Symbolicates virtual method tables based on the method names in superclasses.
     """
     def autoanalyze():
         print 'Waiting for IDA autoanalysis...'
@@ -59,5 +61,6 @@ def kernelcache_process():
     autoanalyze()
     kernelcache_symbolicate_stubs()
     autoanalyze()
+    kernelcache_symbolicate_vtable_overrides()
     print 'Done'
 

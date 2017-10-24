@@ -24,7 +24,7 @@ from kernelcache_vtable_methods import (kernelcache_vtable_overrides)
 
 from kernelcache_vtable_symbols import (kernelcache_vtable_symbol_for_class,
         kernelcache_add_vtable_symbol, kernelcache_add_vtable_symbols,
-        kernelcache_symbolicate_vtable_overrides)
+        kernelcache_class_from_vtable_method_symbol, kernelcache_symbolicate_vtable_overrides)
 
 from kernelcache_metaclass_symbols import (kernelcache_metaclass_name_for_class,
         kernelcache_metaclass_instance_name_for_class, kernelcache_metaclass_symbol_for_class,

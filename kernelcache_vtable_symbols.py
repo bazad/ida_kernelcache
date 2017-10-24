@@ -74,22 +74,23 @@ def kernelcache_add_vtable_symbols():
         else:
             _log(0, 'Class {} has no known vtable', classname)
 
-def _extract_base_class_from_vtable_method_symbol(method_symbol):
-    """Get the base class in a vtable method symbol."""
-    match = re.search(r"\d+", method_symbol)
-    if not match:
+def kernelcache_class_from_vtable_method_symbol(method_symbol):
+    """Get the base class in a vtable method symbol.
+
+    Extract the name of the base class from a canonical method symbol.
+    """
+    demangled = idc.Demangle(method_symbol, idc.GetLongPrm(idc.INF_SHORT_DN))
+    if not demangled:
         return None
-    length = int(match.group(0))
-    start = match.end()
-    classname = method_symbol[start:start+length]
-    if len(classname) != length:
+    classname = demangled.split('::', 1)[0]
+    if classname == demangled:
         return None
     return classname
 
 def _kernelcache_vtable_method_symbol_substitute_class(method_symbol, new_class, old_class=None):
     """Create a new method symbol by substituting the class to which the method belongs."""
     if not old_class:
-        old_class = _extract_base_class_from_vtable_method_symbol(method_symbol)
+        old_class = kernelcache_class_from_vtable_method_symbol(method_symbol)
         if not old_class:
             return None
     old_class_part = '{}{}'.format(len(old_class), old_class)

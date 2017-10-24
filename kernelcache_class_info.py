@@ -161,6 +161,7 @@ class ClassInfo(object):
 
     def __init__(self, classname, metaclass, vtable, class_size, superclass_name, meta_superclass):
         self.superclass      = None
+        self.subclasses      = set()
         self.classname       = classname
         self.metaclass       = metaclass
         self.vtable          = vtable
@@ -176,6 +177,28 @@ class ClassInfo(object):
         return 'ClassInfo({!r}, {}, {}, {}, {!r}, {})'.format(
                 self.classname, hex(self.metaclass), hex(self.vtable),
                 self.class_size, self.superclass_name, hex(self.meta_superclass))
+
+    def ancestors(self):
+        """A generator over all direct or indircet superclasses of this class.
+
+        Ancestors are returned in order from root (most distance) to superclass (closest), and the
+        class itself is not returned.
+        """
+        if self.superclass:
+            for ancestor in superclass.ancestors():
+                yield ancestor
+            yield self.superclass
+
+    def descendants(self):
+        """A generator over all direct or indircet subclasses of this class.
+
+        Descendants are returned in descending depth-first order: first a subclass will be
+        returned, then all of its descendants, before going on to the next subclass of this class.
+        """
+        for subclass in self.subclasses:
+            yield subclass
+            for descendant in subclass.descendants():
+                yield descendant
 
 def _process_mod_init_func_for_metaclasses(func, found_metaclass):
     """Process a function from the __mod_init_func section for OSMetaClass information."""
@@ -300,10 +323,11 @@ def _collect_vtables(metaclass_info):
         classinfo = metaclass_info[metaclass]
         # Add the vtable, which we didn't have earlier.
         classinfo.vtable = vtable
-        # If this class's superclass is still live, set its superclass field. This is safe since
-        # this is the last filtering operation.
+        # If this class's superclass is still live, set its superclass field and add ourselves to
+        # the superclass's children. This is safe since this is the last filtering operation.
         if classinfo.meta_superclass in metaclass_to_vtable:
             classinfo.superclass = metaclass_info[classinfo.meta_superclass]
+            classinfo.superclass.subclasses.add(classinfo)
         class_info[classinfo.classname] = classinfo
     return class_info, all_vtables
 

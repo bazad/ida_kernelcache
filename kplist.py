@@ -56,7 +56,8 @@ class _KPlistBuilder(object):
     # XMLTreeBuilder calls.
 
     def start(self, tag, attr):
-        assert not self.current_data and not self.current_id
+        intervening_data = self.get_data().strip()
+        assert not intervening_data and not self.current_id
         # Check that the attributes are allowed.
         for attrname in set(attr.keys()).difference(('ID', 'IDREF')):
             if attrname not in self.attributes[tag]:

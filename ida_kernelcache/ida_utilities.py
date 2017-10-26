@@ -5,11 +5,11 @@
 # Some utility functions to make working with IDA easier.
 #
 
+from collections import deque
+
 import idc
 import idautils
 import idaapi
-
-from collections import deque
 
 def make_log(log_level, module):
     """Create a logging function."""

@@ -5,37 +5,25 @@
 # The main ida_kernelcache module containing my iOS kernelcache utilities for IDA.
 #
 
-import idc
+# This isn't kernelcache-specific, but it's useful to have access to in the interpreter and other
+# scripts.
+import ida_utilities
 
-from kplist import (kplist_parse)
+import classes
+import kernel
+import kplist
+import metaclass
+import offset
+import segment
+import stub
+import vtable
 
-from kernelcache_ida_segments import (kernelcache_kernel_base, kernelcache_initialize_segments,
-        kernelcache_kext)
-
-from kernelcache_offsets import (kernelcache_data_offsets)
-
-from kernelcache_vtable_utilities import (VTABLE_OFFSET, kernelcache_vtable_length,
-        kernelcache_convert_vtable_to_offsets)
-
-from kernelcache_class_info import (ClassInfo, kernelcache_class_info, kernelcache_vtables,
-        kernelcache_collect_class_info)
-
-from kernelcache_vtable_methods import (kernelcache_vtable_overrides)
-
-from kernelcache_vtable_symbols import (kernelcache_vtable_symbol_for_class,
-        kernelcache_add_vtable_symbol, kernelcache_add_vtable_symbols,
-        kernelcache_class_from_vtable_method_symbol, kernelcache_symbolicate_vtable_overrides)
-
-from kernelcache_metaclass_symbols import (kernelcache_metaclass_name_for_class,
-        kernelcache_metaclass_instance_name_for_class, kernelcache_metaclass_symbol_for_class,
-        kernelcache_add_metaclass_symbol, kernelcache_add_metaclass_symbols)
-
-from kernelcache_stubs import (kernelcache_offset_name_target, kernelcache_stub_name_target,
-        kernelcache_symbol_references_stub, kernelcache_stub_target,
-        kernelcache_symbolicate_offsets, kernelcache_symbolicate_stubs)
+from classes import (ClassInfo, collect_class_info, class_info)
+from kplist  import (kplist_parse)
+from segment import (kernelcache_kext)
 
 def kernelcache_process():
-    """Process the kernelcache in IDA.
+    """Process the kernelcache in IDA for the first time.
 
     This function performs all the standard processing available in this module:
         * Renames segments in IDA according to the names from the __PRELINK_INFO dictionary.
@@ -45,22 +33,23 @@ def kernelcache_process():
         * Converts __stubs sections into stub functions and automatically renames them.
         * Symbolicates virtual method tables based on the method names in superclasses.
     """
+    import idc
     def autoanalyze():
         print 'Waiting for IDA autoanalysis...'
         idc.Wait()
     autoanalyze()
-    # NOTE: Renaming the segments in IDA via kernelcache_initialize_segments() is necessary for
-    # some of the other functions, which rely on the more detailed segment names.
-    kernelcache_initialize_segments()
-    kernelcache_data_offsets()
+    # NOTE: Renaming the segments in IDA via segment.initialize_segments() is necessary for some of
+    # the other functions, which rely on the more detailed segment names.
+    segment.initialize_segments()
+    offset.initialize_data_offsets()
     autoanalyze()
-    kernelcache_add_vtable_symbols()
+    vtable.initialize_vtable_symbols()
     autoanalyze()
-    kernelcache_add_metaclass_symbols()
-    kernelcache_symbolicate_offsets()
+    metaclass.initialize_metaclass_symbols()
+    offset.initialize_offset_symbols()
     autoanalyze()
-    kernelcache_symbolicate_stubs()
+    stub.initialize_stub_symbols()
     autoanalyze()
-    kernelcache_symbolicate_vtable_overrides()
+    vtable.initialize_vtable_method_symbols()
     print 'Done'
 

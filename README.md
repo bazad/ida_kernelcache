@@ -48,13 +48,13 @@ However, there's also no guarantee that ida_kernelcache won't mess up prior anal
 decide to run `kernelcache_process` on a kernelcache file which you've already analyzed, make a
 backup first.
 
-## The module in detail
+## The ida_kernelcache module
 
 ida_kernelcache is meant to be loaded via `ida_kernelcache.py`; the submodules in the
-`ida_kernelcache` directory provide internal functionality that is not meant to be used directly.
-However, here is what each of those scripts does:
+`ida_kernelcache` directory are not meant to be loaded directly. However, ida_kernelcache exposes
+the functionality of many of these submodules. Here is what each of them does:
 
-* **ida_utilities.py**:
+* **ida_utilities**:
 This module wraps some of IDA's functions to provide an easier-to-use API. Particularly useful are
 `is_mapped`, `read_word`, `read_struct`, and `ReadWords`. `is_mapped` checks whether an address is
 mapped, and optionally whether it contains a known value. `read_word` reads a variably-sized word
@@ -62,76 +62,82 @@ from an address. `read_struct` reads a structure type into a Python dictionary o
 object, which makes parsing data structures much easier. `ReadWords` is a generator to iterate over
 data words and their addresses in a range.
 
-* **kplist.py**:
-This module implements a kernel-style plist parser in order to parse the `__PRELINK_INFO` segment.
+* **classes**:
+This module defines the `ClassInfo` type that holds information about C++ classes in the
+kernelcache and provides the function `collect_class_info` to scan the kernelcache for classes and
+populate the global `class_info` dictionary with a map from class names to `ClassInfo` objects. The
+`ClassInfo` type records the class name, the OSMetaClass instance, the virtual method table, and
+the superclass name for each C++ class. Additionally, each `ClassInfo` object stores references to
+the superclass's `ClassInfo` and the `ClassInfo` of all direct subclasses, making it easy to
+examine and traverse the class hierarchy. `collect_class_info` also stores the set of all virtual
+method tables in the global `vtables` set.
 
-* **kernelcache_ida_segments.py**:
-This module provides the function `kernelcache_initialize_segments` to rename IDA's segments to be
-more useful. By default, IDA seems to create the segment names by combining a guess of the bundle
-identifier with the Mach-O section describing the region. `kernelcache_initialize_segments`
-extracts the true bundle identifier from the `__PRELINK_INFO` dictionary and renames each segment
-to include the bundle identifier, Mach-O segment, and Mach-O section. In particular, this makes it
-possible to distinguish between `__TEXT.__const` and `__DATA_CONST.__const`. This module also
-provides the function `kernelcache_kext` to determine the kext containing the specified address.
+* **kernel**:
+This module provides the `base` and `prelink_info` global variables. `base` is the base address of
+the kernel image (the start of the kernel's Mach-O header). `prelink_info` is the parsed
+`__PRELINK_INFO` dictionary.
 
-* **kernelcache_offsets.py**:
-This module provides the function `kernelcache_data_offsets` which scans through the segments
-looking for pointers which can be converted into offsets.
+* **kplist**:
+This module provides the `kplist_parse` function to parse kernel-style plists.
 
-* **kernelcache_vtable_utilities.py**:
-This module provides the functions `kernelcache_vtable_length` and
-`kernelcache_convert_vtable_to_offsets`, the latter of which is mostly redundant if
-`kernelcache_data_offsets` is used. `kernelcache_vtable_length` checks whether the specified
-address could be a vtable and returns the vtable length.
-
-* **kernelcache_class_info.py**:
-This module scans for OSMetaClass instances and virtual method tables and uses this information to
-construct a class hierarchy. Information about each class is stored in a `ClassInfo` object, which
-records the name of the class and superclass, a reference to the superclass's `ClassInfo`, the size
-of the class, the address of the OSMetaClass instance, and the address of the class vtable.
-The `kernelcache_collect_class_info` function collects all this information, and stores a map from
-the class names to `ClassInfo` objects in the global `kernelcache_class_info` dictionary. This
-function also stores the set of all virtual method tables (even those that couldn't be matched to a
-particular class) in the global `kernelcache_vtables` variable.
-
-* **kernelcache_vtable_methods.py**:
-This module provides the generator `kernelcache_vtable_overrides` which enumerates the virtual
-methods in a class which override virtual methods used by the superclass.
-
-* **kernelcache_vtable_symbols.py**:
-This module provides two useful functions, `kernelcache_add_vtable_symbols` and
-`kernelcache_symbolicate_vtable_overrides`. The first adds a symbol for the start of each
-identified vtable. The second iterates through the overridden methods in each vtable and propagates
-symbols from the superclass to the subclass. This is possible because most of the base classes in
-IOKit are defined in XNU with relatively complete symbol information. Each method override in the
-vtable of a subclass must conform to the same interface as the method in the superclass, which
-means we can generate a symbol for the override by substituting the subclass's name for the
-superclass's name in the virtual method symbol in the superclass. For example, if we have no name
-for the virtual method at index 7 in the `AppleKeyStore` class, but we know that the virtual method
-at index 7 in its superclass `IOService` is called `__ZNK9IOService12getMetaClassEv`, then we can
-infer that index 7 should be called `__ZNK13AppleKeyStore12getMetaClassEv` in the subclass. This
-technique can be used to symbolicate most virtual methods in most classes.
-
-* **kernelcache_metaclass_symbols.py**:
-This module provides the function `kernelcache_add_metaclass_symbols` which adds a symbol for each
+* **metaclass**:
+This module provides the function `initialize_metaclass_symbols` which adds a symbol for each
 known OSMetaClass instance.
 
-* **kernelcache_stubs.py**:
-Despite its name, this module actually deals with both stubs and offsets. Many kexts in the
-kernelcache contain stub functions in a `__stubs` section that jump to functions in the kernel
-proper. Unfortunately, these stubs provide a barrier for propagating cross references and type
-information. This module doesn't solve these problems, but it does make looking at stubs a bit
-easier by automatically renaming stub functions so that the target function name is visible. Stubs
-and their targets are forcibly converted into functions in IDA, which helps make the functions in
-IDA line up with the functions in the original source code. Offsets in the `__got` section are
-symbolicated similarly.
+* **offset**:
+This module provides the functions `initialize_data_offsets` and `initialize_offset_symbols`. The
+former scans through the segments looking for pointers which can be converted into offsets. The
+latter symbolicates offsets in the `__got` section of each kext if the target of the offset has a
+symbol.
+
+* **segment**:
+This module provides the function `initialize_segments` to rename IDA's segments to be more useful.
+By default, IDA seems to create the segment names by combining a guess of the bundle identifier
+with the Mach-O section describing the region. `initialize_segments` extracts the true bundle
+identifier from the `__PRELINK_INFO` dictionary and renames each segment to include the bundle
+identifier, Mach-O segment, and Mach-O section. This makes it possible, for example, to distinguish
+between `__TEXT.__const` and `__DATA_CONST.__const`. This module also provides the function
+`kernelcache_kext` (re-exported at the top level) to determine the kext containing the specified
+address.
+
+* **stub**:
+Many kexts in the kernelcache contain stub functions in a `__stubs` section that jump to functions
+in the kernel proper. Unfortunately, these stubs provide a barrier for propagating cross references
+and type information. This module doesn't solve these problems, but it does make looking at stubs a
+bit easier by automatically renaming stub functions so that the target function name is visible.
+Stubs and their targets are forcibly converted into functions in IDA, which helps make the
+functions in IDA line up with the functions in the original source code.
+
+* **vtable**:
+This module provides many useful functions for working with virtual method tables, including
+`vtable_length`, `convert_vtable_to_offsets`, `vtable_overrides`, `initialize_vtable_symbols`, and
+`initialize_vtable_method_symbols`. `vtable_length` checks whether the specified address could be a
+vtable and returns the vtable length. The generator `vtable_overrides` enumerates the virtual
+methods in a class which override virtual methods used by the superclass. The function
+`initialize_vtable_symbols` adds a symbol for the start of each identified vtable.
+`initialize_vtable_method_symbols` iterates through the overridden methods in each vtable and
+propagates symbols from the superclass to the subclass. This is possible because most of the base
+classes in IOKit are defined in XNU with relatively complete symbol information. Each method
+override in the vtable of a subclass must conform to the same interface as the method in the
+superclass, which means we can generate a symbol for the override by substituting the subclass's
+name for the superclass's name in the virtual method symbol in the superclass. For example, if we
+have no name for the virtual method at index 7 in the `AppleKeyStore` class, but we know that the
+virtual method at index 7 in its superclass `IOService` is called
+`__ZNK9IOService12getMetaClassEv`, then we can infer that index 7 should be called
+`__ZNK13AppleKeyStore12getMetaClassEv` in the subclass. This technique can be used to symbolicate
+most virtual methods in most classes.
+
+## Other scripts
+
+The `ida_kernelcache_reload.py` script is identical to `ida_kernelcache.py`, except it forces the
+`ida_kernelcache` module and all submodules to be reloaded. It is mostly useful for development.
 
 ## A note on generalizing
 
 Some of this functionality likely applies more broadly than just to Apple kernelcaches (for
-example, vtable analysis and symbol propagation, or some of the function coercion techniques in
-`kernelcache_stubs.py`). Nonetheless, I've prefixed every public function with `kernelcache_`
-because I have not tested any of this on other types of binaries.
+example, vtable analysis and symbol propagation, or most of the functions in `ida_utilities.py`).
+Nonetheless, I've limited the import scope to just the `ida_kernelcache` module because I have not
+tested any of this on other types of binaries.
 
 ## License
 

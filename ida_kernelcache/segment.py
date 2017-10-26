@@ -1,24 +1,24 @@
 #
-# ida_kernelcache/kernelcache_ida_segments.py
+# ida_kernelcache/segment.py
 # Brandon Azad
 #
-# Rename kernel/kext segments in IDA.
+# Functions for interacting with the segments of the kernelcache in IDA. No prior initialization is
+# necessary.
 #
 
-from ida_utilities import *
+import idc
 
-from kplist import kplist_parse
+import ida_utilities as idau
+import kernel
 
-_log = make_log(0, 'kernelcache_ida_segments')
+_log = idau.make_log(0, __name__)
 
-def kernelcache_find_kernel_base():
-    """Find the kernel base (the address of the main kernel Mach-O header)."""
-    return idaapi.get_fileregion_ea(0)
+idc.Til2Idb(-1, 'mach_header_64')
+idc.Til2Idb(-1, 'load_command')
+idc.Til2Idb(-1, 'segment_command_64')
+idc.Til2Idb(-1, 'section_64')
 
-kernelcache_kernel_base = kernelcache_find_kernel_base()
-"""The kernel base address."""
-
-LC_SEGMENT_64 = 0x19
+_LC_SEGMENT_64 = 0x19
 
 def _macho_segments_and_sections(ea):
     """A generator to iterate through a Mach-O file's segments and sections.
@@ -26,22 +26,22 @@ def _macho_segments_and_sections(ea):
     Each iteration yields a tuple:
         (segname, segstart, segend, [(sectname, sectstart, sectend), ...])
     """
-    hdr   = read_struct(ea, 'mach_header_64', asobject=True)
+    hdr   = idau.read_struct(ea, 'mach_header_64', asobject=True)
     nlc   = hdr.ncmds
     lc    = int(hdr) + len(hdr)
     lcend = lc + hdr.sizeofcmds
     while lc < lcend and nlc > 0:
-        loadcmd = read_struct(lc, 'load_command', asobject=True)
-        if loadcmd.cmd == LC_SEGMENT_64:
-            segcmd = read_struct(lc, 'segment_command_64', asobject=True)
-            segname  = null_terminated(segcmd.segname)
+        loadcmd = idau.read_struct(lc, 'load_command', asobject=True)
+        if loadcmd.cmd == _LC_SEGMENT_64:
+            segcmd = idau.read_struct(lc, 'segment_command_64', asobject=True)
+            segname  = idau.null_terminated(segcmd.segname)
             segstart = segcmd.vmaddr
             segend   = segstart + segcmd.vmsize
             sects    = []
             sc  = int(segcmd) + len(segcmd)
             for i in range(segcmd.nsects):
-                sect = read_struct(sc, 'section_64', asobject=True)
-                sectname  = null_terminated(sect.sectname)
+                sect = idau.read_struct(sc, 'section_64', asobject=True)
+                sectname  = idau.null_terminated(sect.sectname)
                 sectstart = sect.addr
                 sectend   = sectstart + sect.size
                 sects.append((sectname, sectstart, sectend))
@@ -50,7 +50,7 @@ def _macho_segments_and_sections(ea):
         lc  += loadcmd.cmdsize
         nlc -= 1
 
-def _kernelcache_initialize_segments_in_kext(kext, mach_header, skip=[]):
+def _initialize_segments_in_kext(kext, mach_header, skip=[]):
     """Rename the segments in the specified kext."""
     def log_seg(segname, segstart, segend):
         _log(3, '+ segment {: <20} {:x} - {:x}  ({:x})', segname, segstart, segend,
@@ -85,7 +85,7 @@ def _kernelcache_initialize_segments_in_kext(kext, mach_header, skip=[]):
         _log(2, 'Rename {:x} - {:x}: {} -> {}', start, end, idc.SegName(start), newname)
         idc.SegRename(start, newname)
     def process_gap(segname, gapno, start, end):
-        mapped = is_mapped(start)
+        mapped = idau.is_mapped(start)
         log_gap(gapno, start, end, mapped)
         if mapped:
             name = 'HEADER' if start == mach_header else '__gap_' + str(gapno)
@@ -105,13 +105,7 @@ def _kernelcache_initialize_segments_in_kext(kext, mach_header, skip=[]):
             process_gap(segname, gapno, lastend, segend)
             gapno += 1
 
-KERNELCACHE_PRELINK_INFO_SECTION = '__PRELINK_INFO.__info'
-KERNELCACHE_PRELINK_INFO_DICT    = '_PrelinkInfoDictionary'
-
-kernelcache_prelink_info = dict()
-"""The kernelcache __PRELINK_INFO dictionary."""
-
-def kernelcache_initialize_segments():
+def initialize_segments():
     """Rename the kernelcache segments in IDA according to the __PRELINK_INFO data.
 
     Rename the kernelcache segments based on the contents of the __PRELINK_INFO dictionary.
@@ -119,22 +113,12 @@ def kernelcache_initialize_segments():
     the bundle identifier if the segment is part of a kernel extension. The special region
     containing the Mach-O header is renamed '[<kext>:]<segment>.HEADER'.
     """
-    global kernelcache_prelink_info
-    # TODO: There should be some sort of global initialization for this type of stuff.
-    idc.Til2Idb(-1, 'mach_header_64')
-    idc.Til2Idb(-1, 'load_command')
-    idc.Til2Idb(-1, 'segment_command_64')
-    idc.Til2Idb(-1, 'section_64')
     # First rename the kernel segments.
     _log(1, 'Renaming kernel segments')
     kernel_skip = ['__PRELINK_TEXT', '__PLK_TEXT_EXEC', '__PRELINK_DATA', '__PLK_DATA_CONST']
-    _kernelcache_initialize_segments_in_kext(None, kernelcache_kernel_base, skip=kernel_skip)
-    # Now get the __PRELINK_INFO dictionary.
-    prelink_info = idc.SegStart(idc.SegByBase(idc.SegByName(KERNELCACHE_PRELINK_INFO_SECTION)))
-    prelink_info = idc.GetString(prelink_info)
-    kernelcache_prelink_info.update(kplist_parse(prelink_info))
+    _initialize_segments_in_kext(None, kernel.base, skip=kernel_skip)
     # Process each kext identified by the __PRELINK_INFO.
-    prelink_info_dicts = kernelcache_prelink_info[KERNELCACHE_PRELINK_INFO_DICT]
+    prelink_info_dicts = kernel.prelink_info['_PrelinkInfoDictionary']
     for kext_prelink_info in prelink_info_dicts:
         kext = kext_prelink_info.get('CFBundleIdentifier', None)
         mach_header = kext_prelink_info.get('_PrelinkExecutableLoadAddr', None)
@@ -143,12 +127,12 @@ def kernelcache_initialize_segments():
             if '.kpi.' not in kext and orig_kext != kext:
                 _log(0, 'Renaming kext {} -> {}', orig_kext, kext)
             _log(1, 'Renaming segments in {}', kext)
-            _kernelcache_initialize_segments_in_kext(kext, mach_header)
+            _initialize_segments_in_kext(kext, mach_header)
 
 def kernelcache_kext(ea):
     """Return the name of the kext to which the given linear address belongs.
 
-    Only works if segments have been renamed using kernelcache_initialize_segments().
+    Only works if segments have been renamed using initialize_segments().
     """
     name = idc.SegName(ea) or ''
     if ':' in name:

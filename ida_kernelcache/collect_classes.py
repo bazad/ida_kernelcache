@@ -1,18 +1,22 @@
 #
-# ida_kernelcache/kernelcache_class_info.py
+# ida_kernelcache/collect_classes.py
 # Brandon Azad
 #
-# Collect information about C++ classes in a kernelcache.
+# Collects information about C++ classes in a kernelcache.
 #
-
-from ida_utilities import *
 
 from collections import defaultdict
 
-from kernelcache_ida_segments import (kernelcache_kext)
-from kernelcache_vtable_utilities import (VTABLE_OFFSET, kernelcache_vtable_length)
+import idc
+import idautils
+import idaapi
 
-_log = make_log(1, 'kernelcache_class_info')
+import ida_utilities as idau
+import classes
+import segment
+import vtable
+
+_log = idau.make_log(1, __name__)
 
 # IDK where IDA defines these.
 _MEMOP_PREINDEX  = 0x20
@@ -78,11 +82,11 @@ def _emulate_arm64(start, end, on_BL=None, on_RET=None):
             size = 4
         else:
             return None
-        return read_word(addr, size)
+        return idau.read_word(addr, size)
     def cleartemps():
         for t in ['X{}'.format(i) for i in range(0, 19)]:
             reg.clear(t)
-    for insn in Instructions(start, end):
+    for insn in idau.Instructions(start, end):
         _log(11, 'Processing instruction {:#x}', insn.ea)
         mnem = insn.get_canon_mnem()
         if mnem == 'ADRP' or mnem == 'ADR':
@@ -156,50 +160,6 @@ class _OneToOneMapFactory(object):
         self._make_unique_oneway(bs_to_as, as_to_bs, bad_b)
         return self._build_oneway(as_to_bs)
 
-class ClassInfo(object):
-    """Information about a C++ class in a kernelcache."""
-
-    def __init__(self, classname, metaclass, vtable, class_size, superclass_name, meta_superclass):
-        self.superclass      = None
-        self.subclasses      = set()
-        self.classname       = classname
-        self.metaclass       = metaclass
-        self.vtable          = vtable
-        self.class_size      = class_size
-        self.superclass_name = superclass_name
-        self.meta_superclass = meta_superclass
-
-    def __repr__(self):
-        def hex(x):
-            if x is None:
-                return repr(None)
-            return '{:#x}'.format(x)
-        return 'ClassInfo({!r}, {}, {}, {}, {!r}, {})'.format(
-                self.classname, hex(self.metaclass), hex(self.vtable),
-                self.class_size, self.superclass_name, hex(self.meta_superclass))
-
-    def ancestors(self):
-        """A generator over all direct or indircet superclasses of this class.
-
-        Ancestors are returned in order from root (most distance) to superclass (closest), and the
-        class itself is not returned.
-        """
-        if self.superclass:
-            for ancestor in superclass.ancestors():
-                yield ancestor
-            yield self.superclass
-
-    def descendants(self):
-        """A generator over all direct or indircet subclasses of this class.
-
-        Descendants are returned in descending depth-first order: first a subclass will be
-        returned, then all of its descendants, before going on to the next subclass of this class.
-        """
-        for subclass in self.subclasses:
-            yield subclass
-            for descendant in subclass.descendants():
-                yield descendant
-
 def _process_mod_init_func_for_metaclasses(func, found_metaclass):
     """Process a function from the __mod_init_func section for OSMetaClass information."""
     _log(4, 'Processing function {}', idc.GetFunctionName(func))
@@ -217,7 +177,7 @@ def _process_mod_init_func_for_metaclasses(func, found_metaclass):
 def _process_mod_init_func_section_for_metaclasses(segstart, found_metaclass):
     """Process a __mod_init_func section for OSMetaClass information."""
     segend = idc.SegEnd(segstart)
-    for func in ReadWords(segstart, segend):
+    for func in idau.ReadWords(segstart, segend):
         _process_mod_init_func_for_metaclasses(func, found_metaclass)
 
 def _collect_metaclasses():
@@ -252,20 +212,21 @@ def _collect_metaclasses():
     for metaclass, classname in metaclass_to_classname.items():
         meta_superclass = metaclass_to_meta_superclass[metaclass]
         superclass_name = metaclass_to_classname.get(meta_superclass, None)
-        metaclass_info[metaclass] = ClassInfo(classname, metaclass, None,
+        metaclass_info[metaclass] = classes.ClassInfo(classname, metaclass, None,
                 metaclass_to_class_size[metaclass], superclass_name, meta_superclass)
     return metaclass_info
 
-_VTABLE_GETMETACLASS    = VTABLE_OFFSET + 7
+_VTABLE_GETMETACLASS    = vtable.VTABLE_OFFSET + 7
 _MAX_GETMETACLASS_INSNS = 3
 
 def _get_vtable_metaclass(vtable_addr, metaclass_info):
     """Simulate the getMetaClass method of the vtable and check if it returns an OSMetaClass."""
-    getMetaClass = read_word(vtable_addr + _VTABLE_GETMETACLASS * WORD_SIZE)
+    getMetaClass = idau.read_word(vtable_addr + _VTABLE_GETMETACLASS * idau.WORD_SIZE)
     def on_RET(reg):
         on_RET.ret = reg['X0']
     on_RET.ret = None
-    _emulate_arm64(getMetaClass, getMetaClass + WORD_SIZE * _MAX_GETMETACLASS_INSNS, on_RET=on_RET)
+    _emulate_arm64(getMetaClass, getMetaClass + idau.WORD_SIZE * _MAX_GETMETACLASS_INSNS,
+            on_RET=on_RET)
     if on_RET.ret in metaclass_info:
         return on_RET.ret
 
@@ -274,13 +235,13 @@ def _process_const_section_for_vtables(segstart, metaclass_info, found_vtable):
     segend = idc.SegEnd(segstart)
     addr = segstart
     while addr < segend:
-        possible, length = kernelcache_vtable_length(addr, segend, scan=True)
+        possible, length = vtable.vtable_length(addr, segend, scan=True)
         if possible:
             metaclass = _get_vtable_metaclass(addr, metaclass_info)
             if metaclass:
                 _log(4, 'Vtable at address {:#x} has metaclass {:#x}', addr, metaclass)
                 found_vtable(metaclass, addr)
-        addr += length * WORD_SIZE
+        addr += length * idau.WORD_SIZE
 
 def _collect_vtables(metaclass_info):
     """Use OSMetaClass information to search for virtual method tables."""
@@ -289,7 +250,7 @@ def _collect_vtables(metaclass_info):
     metaclass_to_vtable_builder = _OneToOneMapFactory()
     def found_vtable(metaclass, vtable):
         all_vtables.add(vtable)
-        if kernelcache_kext(metaclass) == kernelcache_kext(vtable):
+        if segment.kernelcache_kext(metaclass) == segment.kernelcache_kext(vtable):
             metaclass_to_vtable_builder.add_link(metaclass, vtable)
     for ea in idautils.Segments():
         segname = idc.SegName(ea)
@@ -335,8 +296,11 @@ def _check_filetype(filetype):
     """Checks that the filetype is compatible before trying to process it."""
     return 'Mach-O' in filetype and 'ARM64' in filetype
 
-def _collect_class_info():
-    """Collect information about C++ classes defined in a kernelcache."""
+def collect_class_info_internal():
+    """Collect information about C++ classes defined in a kernelcache.
+
+    Arm64 only.
+    """
     filetype = idaapi.get_file_type_name()
     if not _check_filetype(filetype):
         _log(-1, 'Bad file type "{}"', filetype)
@@ -353,39 +317,4 @@ def _collect_class_info():
         return None
     _log(1, 'Done')
     return class_info, all_vtables
-
-kernelcache_class_info = dict()
-"""A global map from class names to ClassInfo objects. See kernelcache_collect_class_info()."""
-
-kernelcache_vtables = set()
-"""A global set of all identified virtual method tables in the kernel."""
-
-def kernelcache_collect_class_info():
-    """Collect information about C++ classes defined in a kernelcache.
-
-    This function searches through an iOS kernelcache for information about the C++ classes defined
-    in it. It returns a dictionary that maps the C++ class names to a ClassInfo object containing
-    metainformation about the class.
-
-    The result of this function call is cached in the kernelcache_class_info global dictionary. If
-    this dictionary is nonempty, this function will return its value rather than re-examining the
-    kernelcache. To force re-evaluation of this function, clear the kernelcache_class_info
-    dictionary with kernelcache_class_info.clear().
-
-    This function also collects the set of all virtual method tables identified in the kernelcache,
-    even if the corresponding class could not be identified. This set is stored in the
-    kernelcache_vtables set.
-
-    Only Arm64 is supported at this time.
-
-    Only top-level classes are processed. Information about nested classes is not collected.
-    """
-    global kernelcache_class_info
-    if not kernelcache_class_info:
-        result = _collect_class_info()
-        if result is not None:
-            class_info, all_vtables = result
-            kernelcache_class_info.update(class_info)
-            kernelcache_vtables.update(all_vtables)
-    return kernelcache_class_info
 

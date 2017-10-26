@@ -1,5 +1,5 @@
 #
-# kernelcache_offsets.py
+# ida_kernelcache/kernelcache_offsets.py
 # Brandon Azad
 #
 # Convert offsets in data segments into offsets in IDA.
@@ -15,7 +15,8 @@ def kernelcache_data_offsets():
     # chance of this happening is much less.
     for seg in idautils.Segments():
         name = idc.SegName(seg)
-        if not (name.endswith('__DATA_CONST.__const') or name.endswith('__got')):
+        if not (name.endswith('__DATA_CONST.__const') or name.endswith('__got')
+                or name.endswith('__DATA.__data')):
             continue
         for word, ea in ReadWords(seg, idc.SegEnd(seg), addresses=True):
             if is_mapped(word, value=False):

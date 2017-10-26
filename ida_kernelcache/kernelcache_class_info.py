@@ -1,5 +1,5 @@
 #
-# kernelcache_class_info.py
+# ida_kernelcache/kernelcache_class_info.py
 # Brandon Azad
 #
 # Collect information about C++ classes in a kernelcache.

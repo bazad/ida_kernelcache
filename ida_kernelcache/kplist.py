@@ -1,5 +1,5 @@
 #
-# kplist.py
+# ida_kernelcache/kplist.py
 # Brandon Azad
 #
 # Process kernel plists. This code is based on:

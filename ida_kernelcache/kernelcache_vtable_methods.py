@@ -1,5 +1,5 @@
 #
-# kernelcache_vtable_methods.py
+# ida_kernelcache/kernelcache_vtable_methods.py
 # Brandon Azad
 #
 # Functions for examining methods in virtual method tables.

@@ -1,5 +1,5 @@
 #
-# kernelcache_stubs.py
+# ida_kernelcache/kernelcache_stubs.py
 # Brandon Azad
 #
 # Process offsets and stub functions in a kernelcache.

@@ -1,5 +1,5 @@
 #
-# kernelcache_vtable_utilities.py
+# ida_kernelcache/kernelcache_vtable_utilities.py
 # Brandon Azad
 #
 # Utility functions for dealing with virtual method tables.

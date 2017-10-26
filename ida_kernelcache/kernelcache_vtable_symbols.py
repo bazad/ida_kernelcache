@@ -1,5 +1,5 @@
 #
-# kernelcache_vtable_symbols.py
+# ida_kernelcache/kernelcache_vtable_symbols.py
 # Brandon Azad
 #
 # Process C++ virtual method tables in a kernelcache.

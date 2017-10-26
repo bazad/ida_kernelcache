@@ -1,5 +1,5 @@
 #
-# kernelcache_metaclass_symbols.py
+# ida_kernelcache/kernelcache_metaclass_symbols.py
 # Brandon Azad
 #
 # Process OSMetaClass instances in a kernelcache.

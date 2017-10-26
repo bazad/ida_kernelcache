@@ -1,9 +1,9 @@
-## ida_kernelcache: An IDA Toolkit for analyzing iOS kernelcaches
+# ida_kernelcache: An IDA Toolkit for analyzing iOS kernelcaches
 
 <!-- Brandon Azad -->
 
-ida_kernelcache is a set of scripts for IDA Pro to make working with iOS kernelcaches easier. These
-scripts:
+ida_kernelcache is an IDAPython module for IDA Pro to make working with iOS kernelcaches easier.
+The module provides functions to:
 
 * Parse the kernel's `__PRELINK_INFO` segment into a Python dictionary
 * Rename the segments in IDA according to the kernel extension name, Mach-O segment, and Mach-O
@@ -13,31 +13,33 @@ scripts:
 * Symbolicate C++ virtual method tables (both the vtable itself and its methods)
 * Symbolicate offsets in `__got` sections and stub functions in `__stubs` sections
 
-These scripts are designed to be run before any manual analysis or reverse engineering. With the
-default settings, IDA tends to miss a lot of useful information in the kernelcache. These scripts
-help IDA along by leveraging the known structure of the kernelcache to automatically propagate
-useful information.
+The main processing function is designed to be run before any manual analysis or reverse
+engineering. With the default settings, IDA tends to miss a lot of useful information in the
+kernelcache. These scripts help IDA along by leveraging the known structure of the kernelcache to
+automatically propagate useful information.
 
 Many of the techniques used in ida_kernelcache were developed for and borrowed directly from
 [memctl].
 
 [memctl]: https://github.com/bazad/memctl
 
-### Versions
+## Versions
 
 I've tested ida_kernelcache with IDA Pro 6.95 on the iPhone 7 10.1.1 and 11.0 kernelcaches.
 Currently only Arm64 kernelcaches from iOS 10 and later are supported.
 
-### Getting started
+## Getting started
 
 You need to already have a decompressed kernelcache file loaded into IDA. You can find the URL to
 download a particular IPSW from Apple online, and there are a number of public tools (including
 memctl) capable of decompressing the kernelcache.
 
 In IDA, select "File" -> "Script file..." from the menu bar, then choose the `ida_kernelcache.py`
-script. This will load the functions into the IDAPython interpreter. In the IDAPython prompt, type
-`kernelcache_process()` and hit Enter to start analyzing the kernelcache. This process will take
-several minutes as IDA identifies and analyzes new functions.
+script in the main directory. This will load the ida_kernelcache module into the IDAPython
+interpreter under the names `ida_kernelcache` and `kc`. In the IDAPython prompt, type
+`kc.kernelcache_process()` and hit Enter to start analyzing the kernelcache. This function performs
+all the major analyses supported by ida_kernelcache. The function will run for several minutes as
+IDA identifies and analyzes new functions.
 
 ida_kernelcache will try not to overwrite user names for addresses. This means that if the
 kernelcache has been manually analyzed prior to initialization with `kernelcache_process`, the
@@ -46,18 +48,19 @@ However, there's also no guarantee that ida_kernelcache won't mess up prior anal
 decide to run `kernelcache_process` on a kernelcache file which you've already analyzed, make a
 backup first.
 
-### The scripts in detail
+## The module in detail
 
-ida_kernelcache is meant to be loaded via `ida_kernelcache.py`; the other scripts provide internal
-functionality that is not meant to be exported directly. However, here is what each of the scripts
-does:
+ida_kernelcache is meant to be loaded via `ida_kernelcache.py`; the submodules in the
+`ida_kernelcache` directory provide internal functionality that is not meant to be used directly.
+However, here is what each of those scripts does:
 
-* **ida_utilities.py**: This module wraps some of IDA's functions to provide an easier-to-use API.
-  Particularly useful are `is_mapped`, `read_word`, `read_struct`, and `ReadWords`. `is_mapped`
-  checks whether an address is mapped, and optionally whether it contains a known value.
-  `read_word` reads a variably-sized word from an address. `read_struct` reads a structure type
-  into a Python dictionary or Python accessor object, which makes parsing data structures much
-  easier. `ReadWords` is a generator to iterate over data words and their addresses in a range.
+* **ida_utilities.py**:
+This module wraps some of IDA's functions to provide an easier-to-use API. Particularly useful are
+`is_mapped`, `read_word`, `read_struct`, and `ReadWords`. `is_mapped` checks whether an address is
+mapped, and optionally whether it contains a known value. `read_word` reads a variably-sized word
+from an address. `read_struct` reads a structure type into a Python dictionary or Python accessor
+object, which makes parsing data structures much easier. `ReadWords` is a generator to iterate over
+data words and their addresses in a range.
 
 * **kplist.py**:
 This module implements a kernel-style plist parser in order to parse the `__PRELINK_INFO` segment.
@@ -123,14 +126,14 @@ and their targets are forcibly converted into functions in IDA, which helps make
 IDA line up with the functions in the original source code. Offsets in the `__got` section are
 symbolicated similarly.
 
-### A note on generalizing
+## A note on generalizing
 
 Some of this functionality likely applies more broadly than just to Apple kernelcaches (for
 example, vtable analysis and symbol propagation, or some of the function coercion techniques in
 `kernelcache_stubs.py`). Nonetheless, I've prefixed every public function with `kernelcache_`
 because I have not tested any of this on other types of binaries.
 
-### License
+## License
 
 ida_kernelcache is released under the MIT license.
 

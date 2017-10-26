@@ -1,5 +1,5 @@
 #
-# kernelcache_ida_segments.py
+# ida_kernelcache/kernelcache_ida_segments.py
 # Brandon Azad
 #
 # Rename kernel/kext segments in IDA.

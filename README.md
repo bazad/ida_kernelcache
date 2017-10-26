@@ -132,6 +132,14 @@ most virtual methods in most classes.
 The `ida_kernelcache_reload.py` script is identical to `ida_kernelcache.py`, except it forces the
 `ida_kernelcache` module and all submodules to be reloaded. It is mostly useful for development.
 
+The `scripts` directory contains scripts that use ida_kernelcache to perform some sort of analysis.
+These scripts are too specific to be part of the main ida_kernelcache module, but they are useful
+when reverse engineering the kernelcache. They include:
+
+* **find_virtual_method_overrides.py**:
+A script to find descendants of a class that override a virtual method containing the specified
+string. Matching overrides are printed to the console.
+
 ## A note on generalizing
 
 Some of this functionality likely applies more broadly than just to Apple kernelcaches (for

@@ -44,7 +44,7 @@ class ClassInfo(object):
         class itself is not returned.
         """
         if self.superclass:
-            for ancestor in superclass.ancestors():
+            for ancestor in self.superclass.ancestors():
                 yield ancestor
             yield self.superclass
 

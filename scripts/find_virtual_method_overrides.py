@@ -21,14 +21,16 @@ def kernelcache_find_virtual_method_overrides(classname=None, method=None):
         method = idc.AskStr('externalMethod', 'Enter method name')
 
     print 'Subclasses of {} that override {}:'.format(classname, method)
+    baseinfo = kc.class_info[classname]
     found = False
-    for classinfo in kc.class_info[classname].descendants():
-        for _, overridden, _ in kc.vtable.vtable_overrides(classinfo.classname, methods=True):
-            name = idc.NameEx(idc.BADADDR, overridden)
+    for classinfo in baseinfo.descendants():
+        for _, override, _ in kc.vtable.vtable_overrides(classinfo, superinfo=baseinfo,
+                methods=True):
+            name = idc.NameEx(idc.BADADDR, override)
             demangled = idc.Demangle(name, idc.GetLongPrm(idc.INF_SHORT_DN))
             name = demangled if demangled else name
             if method in name:
-                print '{:#x}  {}'.format(overridden, classinfo.classname)
+                print '{:#x}  {}'.format(override, classinfo.classname)
                 found = True
     if not found:
         print 'No subclass of {} overrides {}'.format(classname, method)

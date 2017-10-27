@@ -27,7 +27,7 @@ def vtable_length(ea, end=None, scan=False):
     """Find the length of a virtual method table.
 
     This function checks whether the effective address could correspond to a virtual method table
-    and returns its length.
+    and returns its length, including the initial empty entries.
 
     Arguments:
         ea: The linear address of the start of the vtable.
@@ -40,9 +40,10 @@ def vtable_length(ea, end=None, scan=False):
 
     Returns:
         A tuple (possible, length). If the address could correspond to the start of a vtable, then
-        possible is True and length is the length of the vtable in words. Otherwise, if the address
-        is definitely not the start of a vtable, then possible is False and length is the number of
-        words that can be skipped when searching for the next vtable.
+        possible is True and length is the length of the vtable in words, including the initial
+        empty entries. Otherwise, if the address is definitely not the start of a vtable, then
+        possible is False and length is the number of words that can be skipped when searching for
+        the next vtable.
     """
     if end is None:
         end = idc.SegEnd(ea)
@@ -159,30 +160,73 @@ def initialize_vtable_symbols():
         else:
             _log(0, 'Class {} has no known vtable', classname)
 
-def vtable_overrides(classname, new=False, methods=False):
-    """Get the overrides of a virtual method table.
+def vtable_methods(vtable, length=None):
+    """Get the methods in a virtual method table.
 
-    A generator that returns the index of each override in the virtual method table.
+    A generator that returns each method in the virtual method table. The initial empty entries are
+    skipped.
 
     Arguments:
-        classname: The name of the class.
+        vtable: The address of the virtual method table. (This includes the initial empty entries.)
 
     Options:
+        length: The number of methods to read, excluding the initial empty entries. If None, the
+            whole vtable will be read. Default is None.
+    """
+    # First, get the correct length.
+    if length is None:
+        possible, length = vtable_length(vtable)
+        if not possible:
+            return
+    else:
+        length += VTABLE_OFFSET
+    # Read the methods.
+    for i in xrange(VTABLE_OFFSET, length):
+        yield idau.read_word(vtable + i * idau.WORD_SIZE)
+
+def vtable_overrides(classinfo=None, classname=None, superinfo=None, new=False, methods=False):
+    """Get the overrides of a virtual method table.
+
+    A generator that returns the index of each override in the virtual method table. The index
+    excludes the initial empty entries of the vtable.
+
+    Options:
+        classinfo: The ClassInfo of the class to inspect.
+        classname: The name of the class to inspect.
+        superinfo: The ClassInfo of the ancestor to compare against for overrides. If None, then
+            the ClassInfo of the direct superclass will be used. Default is None.
         new: If True, include new virtual methods not present in the superclass. Default is False.
         methods: If True, then the generator will produce a tuple containing the index, the
             overridden method in the subclass, and the original method in the superclas, rather
             than just the index. Default is False.
+
+    Exactly one of classinfo and classname must be specified.
     """
-    class_info_map = classes.collect_class_info()
+    # First, get the correct classinfo.
+    if classinfo is None:
+        if classname is None:
+            raise ValueError('Invalid arguments: classinfo={}, classname={}'.format(classinfo,
+                classname))
+        class_info_map = classes.collect_class_info()
+        classinfo = class_info_map[classname]
+    elif classname is not None and classinfo.classname != classname:
+        raise ValueError('Invalid arguments: classinfo={}, classname={}'.format(classinfo,
+            classname))
+    # Now get the correct superinfo.
+    if superinfo is None:
+        # Default to the superclass, but if there isn't one, there's nothing to do.
+        superinfo = classinfo.superclass
+        if not superinfo:
+            return
+    else:
+        if superinfo not in classinfo.ancestors():
+            raise ValueError('Invalid arguments: classinfo={}, superinfo={}'.format(classinfo,
+                superinfo))
     # Get the vtable for the class.
-    classinfo = class_info_map[classname]
-    if not classinfo.superclass:
-        return
     class_vtable = classinfo.vtable
     possible, class_vtable_length = vtable_length(class_vtable)
     assert possible, 'Class {} has invalid vtable {:#x}'.format(classname, class_vtable)
     # Get the vtable for the superclass.
-    superinfo = classinfo.superclass
     super_vtable = superinfo.vtable
     possible, super_vtable_length = vtable_length(super_vtable)
     assert possible, 'Class {} has invalid vtable {:#x}'.format(superinfo.classname, super_vtable)
@@ -191,8 +235,12 @@ def vtable_overrides(classname, new=False, methods=False):
     nmethods = super_vtable_length
     if new and class_vtable_length > nmethods:
         nmethods = class_vtable_length
+    # Skip the first VTABLE_OFFSET entries.
+    class_vtable += VTABLE_OFFSET * idau.WORD_SIZE
+    super_vtable += VTABLE_OFFSET * idau.WORD_SIZE
+    nmethods     -= VTABLE_OFFSET
     # Iterate through the methods.
-    for i in xrange(VTABLE_OFFSET, nmethods):
+    for i in xrange(nmethods):
         # Read the old method.
         super_method = None
         if i < super_vtable_length:
@@ -254,7 +302,7 @@ def _symbolicate_overrides_for_classinfo(classinfo, processed):
     if classinfo.superclass:
         _symbolicate_overrides_for_classinfo(classinfo.superclass, processed)
     # Now symbolicate the superclass.
-    for _, override, original in vtable_overrides(classinfo.classname, methods=True):
+    for _, override, original in vtable_overrides(classinfo, methods=True):
         # Skip this method if the override already has a name and we can't rename it.
         override_name = idau.get_ea_name(override, username=True)
         if override_name and not _ok_to_rename_method(override, override_name):

@@ -43,6 +43,8 @@ def kernelcache_process():
     segment.initialize_segments()
     offset.initialize_data_offsets()
     autoanalyze()
+    vtable.initialize_vtables()
+    autoanalyze()
     vtable.initialize_vtable_symbols()
     autoanalyze()
     metaclass.initialize_metaclass_symbols()

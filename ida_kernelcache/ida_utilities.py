@@ -20,6 +20,8 @@ def make_log(log_level, module):
             print module + ': ' + args[0].format(*args[1:])
     return log
 
+_log = make_log(1, __name__)
+
 WORD_SIZE = 0
 """The size of a word on the current platform."""
 
@@ -403,6 +405,63 @@ def read_struct(ea, struct=None, sid=None, members=None, asobject=False):
 def null_terminated(string):
     """Extract the NULL-terminated C string from the given array of bytes."""
     return string.split('\0', 1)[0]
+
+def _convert_address_to_function(func):
+    """Convert an address that IDA has classified incorrectly into a proper function."""
+    # If everything goes wrong, we'll try to restore this function.
+    orig = idc.FirstFuncFchunk(func)
+    # If the address is not code, let's undefine whatever it is.
+    if not idc.isCode(idc.GetFlags(func)):
+        if not is_mapped(func):
+            # Well, that's awkward.
+            return False
+        item    = idc.ItemHead(func)
+        itemend = idc.ItemEnd(func)
+        if item != idc.BADADDR:
+            _log(1, 'Undefining item {:#x} - {:#x}', item, itemend)
+            idc.MakeUnkn(item, idc.DOUNK_EXPAND)
+            idc.MakeCode(func)
+            # Give IDA a chance to analyze the new code or else we won't be able to create a
+            # function.
+            idc.Wait()
+            idc.AnalyseArea(item, itemend)
+    else:
+        # Just try removing the chunk from its current function.
+        idc.RemoveFchunk(func, func)
+    # Now try making a function.
+    if idc.MakeFunction(func) != 0:
+        return True
+    # This is a stubborn chunk. Try recording the list of chunks, deleting the original function,
+    # creating the new function, then re-creating the original function.
+    if orig != idc.BADADDR:
+        chunks = list(idautils.Chunks(orig))
+        if idc.DelFunction(orig) != 0:
+            # Ok, now let's create the new function, and recreate the original.
+            if idc.MakeFunction(func) != 0:
+                if idc.MakeFunction(orig) != 0:
+                    # Ok, so we created the functions! Now, if any of the original chunks are not
+                    # contained in a function, we'll abort and undo.
+                    if all(idaapi.get_func(start) for start, end in chunks):
+                        return True
+            # Try to undo the damage.
+            for start, _ in chunks:
+                idc.DelFunction(start)
+    # Everything we've tried so far has failed. If there was originally a function, try to restore
+    # it.
+    if orig != idc.BADADDR:
+        _log(0, 'Trying to restore original function {:#x}', orig)
+        idc.MakeFunction(orig)
+    return False
+
+def is_function_start(ea):
+    """Return True if the address is the start of a function."""
+    return idc.GetFunctionAttr(ea, idc.FUNCATTR_START) == ea
+
+def force_function(addr):
+    """Ensure that the given address is a function type, converting it if necessary."""
+    if is_function_start(addr):
+        return True
+    return _convert_address_to_function(addr)
 
 def ReadWords(start, end, wordsize=WORD_SIZE, addresses=False):
     """A generator to iterate over the data words in the given address range.

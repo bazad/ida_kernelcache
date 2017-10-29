@@ -56,11 +56,12 @@ the functionality of many of these submodules. Here is what each of them does:
 
 * **ida_utilities**:
 This module wraps some of IDA's functions to provide an easier-to-use API. Particularly useful are
-`is_mapped`, `read_word`, `read_struct`, and `ReadWords`. `is_mapped` checks whether an address is
-mapped, and optionally whether it contains a known value. `read_word` reads a variably-sized word
-from an address. `read_struct` reads a structure type into a Python dictionary or Python accessor
-object, which makes parsing data structures much easier. `ReadWords` is a generator to iterate over
-data words and their addresses in a range.
+`is_mapped`, `read_word`, `read_struct`, `force_function`, and `ReadWords`. `is_mapped` checks
+whether an address is mapped, and optionally whether it contains a known value. `read_word` reads a
+variably-sized word from an address. `read_struct` reads a structure type into a Python dictionary
+or Python accessor object, which makes parsing data structures much easier. `force_function` tries
+several tricks to convert an address into the start of a function in IDA. `ReadWords` is a
+generator to iterate over data words and their addresses in a range.
 
 * **classes**:
 This module defines the `ClassInfo` type that holds information about C++ classes in the

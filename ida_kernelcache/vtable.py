@@ -124,6 +124,20 @@ def convert_vtable_to_offsets(vtable, length=None):
             successful = False
     return successful
 
+def _convert_vtable_methods_to_functions(vtable, length):
+    """Convert each virtual method in the vtable into an IDA function."""
+    for vmethod in vtable_methods(vtable, length=length):
+        if not idau.force_function(vmethod):
+            _log(0, 'Could not convert virtual method {:#x} into a function', vmethod)
+
+def initialize_vtables():
+    """Convert vtables into offsets and ensure that virtual methods are IDA functions."""
+    classes.collect_class_info()
+    for vtable, length in classes.vtables.items():
+        if not convert_vtable_to_offsets(vtable, length):
+            _log(0, 'Could not convert vtable at address {:x} into offsets', vtable)
+        _convert_vtable_methods_to_functions(vtable, length)
+
 def vtable_symbol_for_class(classname):
     """Get the symbol name for the vtable for the given class name.
 
@@ -163,16 +177,9 @@ def add_vtable_symbol(vtable, classname):
     return True
 
 def initialize_vtable_symbols():
-    """Populate IDA with virtual method table information for an iOS kernelcache.
-
-    Search through the kernelcache for virtual method tables, convert each virtual method table
-    into a sequence of offsets, and add a symbol for each identified virtual method table.
-    """
-    class_info_map = classes.collect_class_info()
-    for vtable, length in classes.vtables.items():
-        if not convert_vtable_to_offsets(vtable, length):
-            _log(0, 'Could not convert vtable at address {:x} into offsets', vtable)
-    for classname, classinfo in class_info_map.items():
+    """Populate IDA with virtual method table symbols for an iOS kernelcache."""
+    classes.collect_class_info()
+    for classname, classinfo in classes.class_info.items():
         if classinfo.vtable:
             _log(3, 'Class {} has vtable at {:#x}', classname, classinfo.vtable)
             if not add_vtable_symbol(classinfo.vtable, classname):
@@ -385,7 +392,8 @@ def _symbolicate_overrides_for_classinfo(classinfo, processed):
 def initialize_vtable_method_symbols():
     """Symbolicate overridden methods in a virtual method table.
 
-    Propagate symbol names from the virtual method tables of the base classes."""
+    Propagate symbol names from the virtual method tables of the base classes.
+    """
     processed = set()
     class_info_map = classes.collect_class_info()
     for classinfo in class_info_map.values():

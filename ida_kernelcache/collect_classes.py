@@ -212,7 +212,7 @@ def _collect_metaclasses():
     for metaclass, classname in metaclass_to_classname.items():
         meta_superclass = metaclass_to_meta_superclass[metaclass]
         superclass_name = metaclass_to_classname.get(meta_superclass, None)
-        metaclass_info[metaclass] = classes.ClassInfo(classname, metaclass, None,
+        metaclass_info[metaclass] = classes.ClassInfo(classname, metaclass, None, None,
                 metaclass_to_class_size[metaclass], superclass_name, meta_superclass)
     return metaclass_info
 
@@ -240,16 +240,16 @@ def _process_const_section_for_vtables(segstart, metaclass_info, found_vtable):
             metaclass = _get_vtable_metaclass(addr, metaclass_info)
             if metaclass:
                 _log(4, 'Vtable at address {:#x} has metaclass {:#x}', addr, metaclass)
-                found_vtable(metaclass, addr)
+                found_vtable(metaclass, addr, length)
         addr += length * idau.WORD_SIZE
 
 def _collect_vtables(metaclass_info):
     """Use OSMetaClass information to search for virtual method tables."""
-    all_vtables = set()
     # Build a mapping from OSMetaClass instances to virtual method tables.
     metaclass_to_vtable_builder = _OneToOneMapFactory()
-    def found_vtable(metaclass, vtable):
-        all_vtables.add(vtable)
+    vtable_lengths = {}
+    def found_vtable(metaclass, vtable, length):
+        vtable_lengths[vtable] = length
         if segment.kernelcache_kext(metaclass) == segment.kernelcache_kext(vtable):
             metaclass_to_vtable_builder.add_link(metaclass, vtable)
     for ea in idautils.Segments():
@@ -282,15 +282,16 @@ def _collect_vtables(metaclass_info):
     class_info = dict()
     for metaclass, vtable in metaclass_to_vtable.items():
         classinfo = metaclass_info[metaclass]
-        # Add the vtable, which we didn't have earlier.
-        classinfo.vtable = vtable
+        # Add the vtable and its length, which we didn't have earlier.
+        classinfo.vtable        = vtable
+        classinfo.vtable_length = vtable_lengths[vtable]
         # If this class's superclass is still live, set its superclass field and add ourselves to
         # the superclass's children. This is safe since this is the last filtering operation.
         if classinfo.meta_superclass in metaclass_to_vtable:
             classinfo.superclass = metaclass_info[classinfo.meta_superclass]
             classinfo.superclass.subclasses.add(classinfo)
         class_info[classinfo.classname] = classinfo
-    return class_info, all_vtables
+    return class_info, vtable_lengths
 
 def _check_filetype(filetype):
     """Checks that the filetype is compatible before trying to process it."""

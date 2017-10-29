@@ -9,21 +9,23 @@
 
 import collect_classes
 
-class_info = dict()
+class_info = {}
 """A global map from class names to ClassInfo objects. See collect_class_info()."""
 
-vtables = set()
-"""A global set of all identified virtual method tables in the kernel."""
+vtables = {}
+"""A global map from the address each virtual method tables in the kernelcache to its length."""
 
 class ClassInfo(object):
     """Information about a C++ class in a kernelcache."""
 
-    def __init__(self, classname, metaclass, vtable, class_size, superclass_name, meta_superclass):
+    def __init__(self, classname, metaclass, vtable, vtable_length, class_size, superclass_name,
+            meta_superclass):
         self.superclass      = None
         self.subclasses      = set()
         self.classname       = classname
         self.metaclass       = metaclass
         self.vtable          = vtable
+        self.vtable_length   = vtable_length
         self.class_size      = class_size
         self.superclass_name = superclass_name
         self.meta_superclass = meta_superclass
@@ -33,30 +35,47 @@ class ClassInfo(object):
             if x is None:
                 return repr(None)
             return '{:#x}'.format(x)
-        return 'ClassInfo({!r}, {}, {}, {}, {!r}, {})'.format(
+        return 'ClassInfo({!r}, {}, {}, {}, {}, {!r}, {})'.format(
                 self.classname, hex(self.metaclass), hex(self.vtable),
-                self.class_size, self.superclass_name, hex(self.meta_superclass))
+                self.vtable_length, self.class_size, self.superclass_name,
+                hex(self.meta_superclass))
 
-    def ancestors(self):
+    @property
+    def vtable_methods(self):
+        return self.vtable + vtable.VTABLE_OFFSET
+
+    @property
+    def vtable_nmethods(self):
+        return self.vtable_length - vtable.VTABLE_OFFSET
+
+    def ancestors(self, inclusive=False):
         """A generator over all direct or indircet superclasses of this class.
 
         Ancestors are returned in order from root (most distance) to superclass (closest), and the
         class itself is not returned.
+
+        Options:
+            inclusive: If True, then this class is included in the iteration. Default is False.
         """
         if self.superclass:
-            for ancestor in self.superclass.ancestors():
+            for ancestor in self.superclass.ancestors(inclusive=True):
                 yield ancestor
-            yield self.superclass
+        if inclusive:
+            yield self
 
-    def descendants(self):
+    def descendants(self, inclusive=False):
         """A generator over all direct or indircet subclasses of this class.
 
         Descendants are returned in descending depth-first order: first a subclass will be
         returned, then all of its descendants, before going on to the next subclass of this class.
+
+        Options:
+            inclusive: If True, then this class is included in the iteration. Default is False.
         """
+        if inclusive:
+            yield self
         for subclass in self.subclasses:
-            yield subclass
-            for descendant in subclass.descendants():
+            for descendant in subclass.descendants(inclusive=True):
                 yield descendant
 
 def collect_class_info():
@@ -72,8 +91,8 @@ def collect_class_info():
     class_info.clear().
 
     This function also collects the set of all virtual method tables identified in the kernelcache,
-    even if the corresponding class could not be identified. This set is stored in the global
-    vtables variable.
+    even if the corresponding class could not be identified. A mapping from each virtual method
+    table to its length is stored in the global vtables variable.
 
     Only Arm64 is supported at this time.
 

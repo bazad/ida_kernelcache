@@ -27,24 +27,41 @@ def vtable_length(ea, end=None, scan=False):
     """Find the length of a virtual method table.
 
     This function checks whether the effective address could correspond to a virtual method table
-    and returns its length, including the initial empty entries.
+    and calculates its length, including the initial empty entries. By default (when scan is
+    False), this function returns the length of the vtable if the address could correspond to a
+    vtable, or 0 if the address definitely could not be a vtable.
 
     Arguments:
         ea: The linear address of the start of the vtable.
 
     Options:
         end: The end address to search through. Defaults to the end of the section.
-        scan: As a slight optimization when using this function to scan for vtables, setting scan
-            to True will cause this function to look ahead in some cases to increase the amount of
-            data that can be skipped, reducing duplication of effort between subsequent calls.
+        scan: Set to True to indicate that this function is being called to scan memory for virtual
+            method tables. Instead of returning the length of the vtable or 0, this function will
+            return a tuple (possible, length). Additionally, as a slight optimization, this
+            function will sometimes look ahead in order to increase the amount of data that can be
+            skipped, reducing duplication of effort between subsequent calls.
 
     Returns:
-        A tuple (possible, length). If the address could correspond to the start of a vtable, then
-        possible is True and length is the length of the vtable in words, including the initial
-        empty entries. Otherwise, if the address is definitely not the start of a vtable, then
-        possible is False and length is the number of words that can be skipped when searching for
-        the next vtable.
+        If scan is False (the default), then this function returns the length of the vtable in
+        words, including the initial empty entries.
+
+        Otherwise, this function returns a tuple (possible, length). If the address could
+        correspond to the start of a vtable, then possible is True and length is the length of the
+        vtable in words, including the initial empty entries. Otherwise, if the address is
+        definitely not the start of a vtable, then possible is False and length is the number of
+        words that can be skipped when searching for the next vtable.
     """
+    # TODO: This function should be reorganized. The better way of doing it is to count the number
+    # of zero entries, then the number of nonzero entries, then decide based on that. Less
+    # special-casing that way.
+    # TODO: We should have a static=True/False flag to indicate whether we want to include the
+    # empty entries.
+    def return_value(possible, length):
+        if scan:
+            return possible, length
+        return length if possible else 0
+    # Initialize default values.
     if end is None:
         end = idc.SegEnd(ea)
     words = idau.ReadWords(ea, end)
@@ -52,12 +69,12 @@ def vtable_length(ea, end=None, scan=False):
     # past all the words we just saw.
     for idx, word in enumerate(islice(words, VTABLE_OFFSET)):
         if word != 0:
-            return False, idx + 1
+            return return_value(False, idx + 1)
     # Now this first word after the padding section is special.
     first = next(words, None)
     if first is None:
         # We have 2 zeros followed by the end of our range.
-        return False, VTABLE_OFFSET
+        return return_value(False, VTABLE_OFFSET)
     elif first == 0:
         # We have VTABLE_OFFSET + 1 zero entries.
         zeros = VTABLE_OFFSET + 1
@@ -66,34 +83,38 @@ def vtable_length(ea, end=None, scan=False):
             # look ahead a bit until we find the first non-zero value.
             for word in words:
                 if word is None:
-                    return False, zeros
+                    return return_value(False, zeros)
                 if word != 0:
                     break
                 zeros += 1
             else:
                 # We found no nonzero words before the end.
-                return False, zeros
+                return return_value(False, zeros)
         # We can skip all but the last VTABLE_OFFSET zeros.
-        return False, zeros - VTABLE_OFFSET
+        return return_value(False, zeros - VTABLE_OFFSET)
     # TODO: We should verify that all vtable entries refer to code.
     # Now we know that we have at least one nonzero value, our job is easier. Get the full length
     # of the vtable, including the first VTABLE_OFFSET entries and the subsequent nonzero entries,
     # until either we find a zero word (not included) or run out of words in the stream.
     length = VTABLE_OFFSET + 1 + idau.iterlen(takewhile(lambda word: word != 0, words))
     # Now it's simple: We are valid if the length is long enough, invalid if it's too short.
-    return length >= MIN_VTABLE_LENGTH, length
+    return return_value(length >= MIN_VTABLE_LENGTH, length)
 
-def convert_vtable_to_offsets(vtable):
+def convert_vtable_to_offsets(vtable, length=None):
     """Convert a vtable into a sequence of offsets.
 
     Arguments:
         vtable: The address of the virtual method table.
 
+    Options:
+        length: The length of the vtable, if known.
+
     Returns:
         True if the data was successfully converted into offsets.
     """
-    possible, length = vtable_length(vtable)
-    if not possible:
+    if length is None:
+        length = vtable_length(vtable)
+    if not length:
         _log(0, 'Address {:#x} is not a vtable', vtable)
         return False
     successful = True
@@ -148,8 +169,8 @@ def initialize_vtable_symbols():
     into a sequence of offsets, and add a symbol for each identified virtual method table.
     """
     class_info_map = classes.collect_class_info()
-    for vtable in classes.vtables:
-        if not convert_vtable_to_offsets(vtable):
+    for vtable, length in classes.vtables.items():
+        if not convert_vtable_to_offsets(vtable, length):
             _log(0, 'Could not convert vtable at address {:x} into offsets', vtable)
     for classname, classinfo in class_info_map.items():
         if classinfo.vtable:
@@ -160,90 +181,83 @@ def initialize_vtable_symbols():
         else:
             _log(0, 'Class {} has no known vtable', classname)
 
-def vtable_methods(vtable, length=None):
+def vtable_methods(vtable, length=None, nmethods=None):
     """Get the methods in a virtual method table.
 
     A generator that returns each method in the virtual method table. The initial empty entries are
     skipped.
 
-    Arguments:
-        vtable: The address of the virtual method table. (This includes the initial empty entries.)
-
     Options:
-        length: The number of methods to read, excluding the initial empty entries. If None, the
+        vtable: The address of the virtual method table. (This includes the initial empty entries.)
+        length: The length of the vtable, including the initial empty entries. Specify this value
+            to read the entire vtable if the length is already known.
+        nmethods: The number of methods to read, excluding the initial empty entries. If None, the
             whole vtable will be read. Default is None.
     """
-    # First, get the correct length.
-    if length is None:
-        possible, length = vtable_length(vtable)
-        if not possible:
-            return
-    else:
-        length += VTABLE_OFFSET
+    # Get the length of the vtable.
+    if nmethods is not None:
+        length = nmethods + VTABLE_OFFSET
+    elif length is None:
+        length = vtable_length(vtable)
     # Read the methods.
     for i in xrange(VTABLE_OFFSET, length):
         yield idau.read_word(vtable + i * idau.WORD_SIZE)
 
-def vtable_overrides(classinfo=None, classname=None, superinfo=None, new=False, methods=False):
-    """Get the overrides of a virtual method table.
+def class_vtable_methods(classinfo, nmethods=None):
+    """Get the methods in a virtual method table for a class.
 
-    A generator that returns the index of each override in the virtual method table. The index
-    excludes the initial empty entries of the vtable.
+    A generator that returns each method in the virtual method table. The initial empty entries are
+    skipped.
+
+    Arguments:
+        classinfo: The ClassInfo object describing the class.
 
     Options:
-        classinfo: The ClassInfo of the class to inspect.
-        classname: The name of the class to inspect.
-        superinfo: The ClassInfo of the ancestor to compare against for overrides. If None, then
-            the ClassInfo of the direct superclass will be used. Default is None.
+        nmethods: The number of methods to read, excluding the initial empty entries. If None, the
+            whole vtable will be read. Default is None.
+    """
+    return vtable_methods(classinfo.vtable, length=classinfo.vtable_length, nmethods=nmethods)
+
+def vtable_overrides(class_vtable, super_vtable, class_vlength=None, super_vlength=None,
+        new=False, methods=False):
+    """Get the overrides of a virtual method table.
+
+    A generator that returns the index of each override in the virtual method table. The initial
+    empty entries are skipped.
+
+    Arguments:
+        class_vtable: The vtable of the class.
+        super_vtable: The vtable of the ancestor to compare against for overrides.
+
+    Options:
+        class_vlength: The length of class_vtable. If None, it will be calculated.
+        super_vlength: The length of super_vtable. If None, it will be calculated.
         new: If True, include new virtual methods not present in the superclass. Default is False.
         methods: If True, then the generator will produce a tuple containing the index, the
             overridden method in the subclass, and the original method in the superclas, rather
             than just the index. Default is False.
-
-    Exactly one of classinfo and classname must be specified.
     """
-    # First, get the correct classinfo.
-    if classinfo is None:
-        if classname is None:
-            raise ValueError('Invalid arguments: classinfo={}, classname={}'.format(classinfo,
-                classname))
-        class_info_map = classes.collect_class_info()
-        classinfo = class_info_map[classname]
-    elif classname is not None and classinfo.classname != classname:
-        raise ValueError('Invalid arguments: classinfo={}, classname={}'.format(classinfo,
-            classname))
-    # Now get the correct superinfo.
-    if superinfo is None:
-        # Default to the superclass, but if there isn't one, there's nothing to do.
-        superinfo = classinfo.superclass
-        if not superinfo:
-            return
-    else:
-        if superinfo not in classinfo.ancestors():
-            raise ValueError('Invalid arguments: classinfo={}, superinfo={}'.format(classinfo,
-                superinfo))
-    # Get the vtable for the class.
-    class_vtable = classinfo.vtable
-    possible, class_vtable_length = vtable_length(class_vtable)
-    assert possible, 'Class {} has invalid vtable {:#x}'.format(classname, class_vtable)
-    # Get the vtable for the superclass.
-    super_vtable = superinfo.vtable
-    possible, super_vtable_length = vtable_length(super_vtable)
-    assert possible, 'Class {} has invalid vtable {:#x}'.format(superinfo.classname, super_vtable)
-    assert class_vtable_length >= super_vtable_length
-    # How many methods are we iterating over?
-    nmethods = super_vtable_length
-    if new and class_vtable_length > nmethods:
-        nmethods = class_vtable_length
+    # Get the vtable lengths.
+    if class_vlength is None:
+        class_vlength = vtable_length(class_vtable)
+    if super_vlength is None:
+        super_vlength = vtable_length(super_vtable)
+    assert class_vlength >= super_vlength >= 0
     # Skip the first VTABLE_OFFSET entries.
-    class_vtable += VTABLE_OFFSET * idau.WORD_SIZE
-    super_vtable += VTABLE_OFFSET * idau.WORD_SIZE
-    nmethods     -= VTABLE_OFFSET
+    class_vtable  += VTABLE_OFFSET * idau.WORD_SIZE
+    super_vtable  += VTABLE_OFFSET * idau.WORD_SIZE
+    class_vlength -= VTABLE_OFFSET
+    super_vlength -= VTABLE_OFFSET
+    # How many methods are we iterating over?
+    if new:
+        nmethods = class_vlength
+    else:
+        nmethods = super_vlength
     # Iterate through the methods.
     for i in xrange(nmethods):
         # Read the old method.
         super_method = None
-        if i < super_vtable_length:
+        if i < super_vlength:
             super_method = idau.read_word(super_vtable + i * idau.WORD_SIZE)
         # Read the new method. (It's always in range.)
         class_method = idau.read_word(class_vtable + i * idau.WORD_SIZE)
@@ -253,6 +267,49 @@ def vtable_overrides(classinfo=None, classname=None, superinfo=None, new=False, 
                 yield i, class_method, super_method
             else:
                 yield i
+
+def class_vtable_overrides(classinfo, superinfo=None, new=False, methods=False):
+    """Get the overrides of a virtual method table for a class.
+
+    A generator that returns the index of each override in the virtual method table. The initial
+    empty entries are skipped.
+
+    Arguments:
+        classinfo: The ClassInfo of the class to inspect.
+
+    Options:
+        superinfo: The ClassInfo of the ancestor to compare against for overrides. If None, then
+            the ClassInfo of the direct superclass will be used. Default is None.
+        new: If True, include new virtual methods not present in the superclass. Default is False.
+        methods: If True, then the generator will produce a tuple containing the index, the
+            overridden method in the subclass, and the original method in the superclas, rather
+            than just the index. Default is False.
+    """
+    # Get the correct superinfo.
+    if superinfo is None:
+        # Default to the superclass, but if there isn't one, there's nothing to do.
+        superinfo = classinfo.superclass
+        if not superinfo and not new:
+            return
+    else:
+        if superinfo not in classinfo.ancestors():
+            raise ValueError('Invalid arguments: classinfo={}, superinfo={}'.format(classinfo,
+                superinfo))
+    # Get the vtable for the class.
+    class_vtable = classinfo.vtable
+    class_vlength = classinfo.vtable_length
+    # Get the vtable for the superclass.
+    if superinfo:
+        super_vtable = superinfo.vtable
+        super_vlength = superinfo.vtable_length
+        assert class_vlength >= super_vlength
+    else:
+        super_vtable = 0
+        super_vlength = 0
+    # Run the generator.
+    for x in vtable_overrides(class_vtable, super_vtable, class_vlength=class_vlength,
+            super_vlength=super_vlength, new=new, methods=methods):
+        yield x
 
 def class_from_vtable_method_symbol(method_symbol):
     """Get the base class in a vtable method symbol.
@@ -302,7 +359,7 @@ def _symbolicate_overrides_for_classinfo(classinfo, processed):
     if classinfo.superclass:
         _symbolicate_overrides_for_classinfo(classinfo.superclass, processed)
     # Now symbolicate the superclass.
-    for _, override, original in vtable_overrides(classinfo, methods=True):
+    for _, override, original in class_vtable_overrides(classinfo, methods=True):
         # Skip this method if the override already has a name and we can't rename it.
         override_name = idau.get_ea_name(override, username=True)
         if override_name and not _ok_to_rename_method(override, override_name):

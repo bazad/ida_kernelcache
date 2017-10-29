@@ -265,6 +265,18 @@ def Instructions(start, end=None, count=None):
     else:
         return _instructions_by_count(start, count)
 
+_FF_FLAG_FOR_SIZE = {
+    1:  idc.FF_BYTE,
+    2:  idc.FF_WORD,
+    4:  idc.FF_DWRD,
+    8:  idc.FF_QWRD,
+    16: idc.FF_OWRD,
+}
+
+def word_flag(wordsize=WORD_SIZE):
+    """Get the FF_xxxx flag for the given word size."""
+    return _FF_FLAG_FOR_SIZE.get(wordsize, 0)
+
 def read_word(ea, wordsize=WORD_SIZE):
     """Get the word at the given address.
 

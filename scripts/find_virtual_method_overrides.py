@@ -24,7 +24,7 @@ def kernelcache_find_virtual_method_overrides(classname=None, method=None):
     baseinfo = kc.class_info[classname]
     found = False
     for classinfo in baseinfo.descendants():
-        for _, override, _ in kc.vtable.vtable_overrides(classinfo, superinfo=baseinfo,
+        for _, override, _ in kc.vtable.class_vtable_overrides(classinfo, superinfo=baseinfo,
                 methods=True):
             name = idc.NameEx(idc.BADADDR, override)
             demangled = idc.Demangle(name, idc.GetLongPrm(idc.INF_SHORT_DN))

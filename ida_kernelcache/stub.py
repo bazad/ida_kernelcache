@@ -75,7 +75,7 @@ def stub_target(stub_func):
 
 def _symbolicate_stub(stub, target, next_stub):
     """Set a symbol for a stub function."""
-    name = idau.get_ea_name(target, username=True)
+    name = idau.get_ea_name(target, user=True)
     if not name:
         _log(3, 'Stub {:#x} has target {:#x} without a name', stub, target)
         return False

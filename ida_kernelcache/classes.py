@@ -8,6 +8,7 @@
 #
 
 import collect_classes
+import vtable
 
 class_info = {}
 """A global map from class names to ClassInfo objects. See collect_class_info()."""

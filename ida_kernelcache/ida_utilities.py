@@ -102,7 +102,7 @@ def get_name_ea(name, fromaddr=idc.BADADDR):
     """
     return idc.LocByNameEx(fromaddr, name)
 
-def get_ea_name(ea, fromaddr=idc.BADADDR, truename=False, username=False):
+def get_ea_name(ea, fromaddr=idc.BADADDR, true=False, user=False):
     """Get the name of an address.
 
     This function returns the name associated with the byte at the specified address.
@@ -115,15 +115,15 @@ def get_ea_name(ea, fromaddr=idc.BADADDR, truename=False, username=False):
             location-specific name (for example, labels within a function). If fromaddr is not
             BADADDR, then this function will try to retrieve the name of ea from fromaddr's
             perspective. The global name will be returned if no location-specific name is found.
-        truename: Retrieve the true name rather than the display name. Default is False.
-        username: Return "" if the name is not a user name.
+        true: Retrieve the true name rather than the display name. Default is False.
+        user: Return "" if the name is not a user name.
 
     Returns:
         The name of the address or "".
     """
-    if username and not idc.hasUserName(idc.GetFlags(ea)):
+    if user and not idc.hasUserName(idc.GetFlags(ea)):
         return ""
-    if truename:
+    if true:
         return idc.GetTrueNameEx(fromaddr, ea)
     else:
         return idc.NameEx(fromaddr, ea)

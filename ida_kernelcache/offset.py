@@ -56,7 +56,7 @@ def _process_offset(offset, ea, next_offset):
     if not idc.OpOff(ea, 0, 0):
         _log(1, 'Could not convert {:#x} into an offset', ea)
     # Get the name to which the offset refers.
-    name = idau.get_ea_name(offset, username=True)
+    name = idau.get_ea_name(offset, user=True)
     if not name:
         _log(3, 'Offset at address {:#x} has target {:#x} without a name', ea, offset)
         return False

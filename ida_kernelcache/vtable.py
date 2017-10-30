@@ -368,11 +368,11 @@ def _symbolicate_overrides_for_classinfo(classinfo, processed):
     # Now symbolicate the superclass.
     for _, override, original in class_vtable_overrides(classinfo, methods=True):
         # Skip this method if the override already has a name and we can't rename it.
-        override_name = idau.get_ea_name(override, username=True)
+        override_name = idau.get_ea_name(override, user=True)
         if override_name and not _ok_to_rename_method(override, override_name):
             continue
         # Skip this method if the original does not have a name or if it's a bad name.
-        original_name = idau.get_ea_name(original, username=True)
+        original_name = idau.get_ea_name(original, user=True)
         if not original_name or _bad_name_dont_use_as_override(original_name):
             continue
         # Get the new override name if we substitute for the override class's name.

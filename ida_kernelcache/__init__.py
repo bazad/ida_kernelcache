@@ -9,6 +9,7 @@
 # scripts.
 import ida_utilities
 
+import class_struct
 import classes
 import kernel
 import kplist
@@ -32,6 +33,7 @@ def kernelcache_process():
         * Converts __got sections into offsets and automatically renames them.
         * Converts __stubs sections into stub functions and automatically renames them.
         * Symbolicates virtual method tables based on the method names in superclasses.
+        * Creates IDA structs representing the C++ classes in the kernel.
     """
     import idc
     def autoanalyze():
@@ -53,5 +55,7 @@ def kernelcache_process():
     stub.initialize_stub_symbols()
     autoanalyze()
     vtable.initialize_vtable_method_symbols()
+    class_struct.initialize_vtable_structs()
+    class_struct.initialize_class_structs()
     print 'Done'
 

@@ -57,5 +57,6 @@ def kernelcache_process():
     vtable.initialize_vtable_method_symbols()
     class_struct.initialize_vtable_structs()
     class_struct.initialize_class_structs()
+    autoanalyze()
     print 'Done'
 

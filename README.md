@@ -12,6 +12,9 @@ The module provides functions to:
 * Reconstruct the C++ class hierarchy based on OSMetaClass information
 * Symbolicate C++ virtual method tables (both the vtable itself and its methods)
 * Symbolicate offsets in `__got` sections and stub functions in `__stubs` sections
+* Autogenerate IDA structs representing the C++ virtual method tables
+* Autogenerate IDA structs representing the C++ classes in the kernelcache based on observed access
+  patterns
 
 The main processing function is designed to be run before any manual analysis or reverse
 engineering. With the default settings, IDA tends to miss a lot of useful information in the
@@ -63,6 +66,18 @@ or Python accessor object, which makes parsing data structures much easier. `for
 several tricks to convert an address into the start of a function in IDA. `ReadWords` is a
 generator to iterate over data words and their addresses in a range.
 
+* **build_struct**:
+This internal module contains utilities to automatically populate an IDA struct based on a sequence
+of accesses to the struct.
+
+* **class_struct**:
+This module provides functions to generate IDA structs representing C++ virtual method tables and
+classes. `initialize_vtable_structs` scans the (symbolicated) virtual method tables and creates IDA
+structs to hold virtual method pointers. `initialize_class_structs` performs a data flow analysis
+on the virtual methods to identify accesses to the fields of each class, then builds IDA structs to
+represent the classes. Instructions that appear to reference a field are also converted into
+structure offset references. See the module docstring for more details.
+
 * **classes**:
 This module defines the `ClassInfo` type that holds information about C++ classes in the
 kernelcache and provides the function `collect_class_info` to scan the kernelcache for classes and
@@ -72,6 +87,9 @@ the superclass name for each C++ class. Additionally, each `ClassInfo` object st
 the superclass's `ClassInfo` and the `ClassInfo` of all direct subclasses, making it easy to
 examine and traverse the class hierarchy. `collect_class_info` also stores the set of all virtual
 method tables in the global `vtables` set.
+
+* **data_flow**:
+This internal module contains data flow operations used by the rest of ida_kernelcache.
 
 * **kernel**:
 This module provides the `base` and `prelink_info` global variables. `base` is the base address of

@@ -124,33 +124,12 @@ import ida_utilities as idau
 import build_struct
 import classes
 import data_flow
+import symbol
 import vtable
 
 _log = idau.make_log(2, __name__)
 
 #### Vtable generation ############################################################################
-
-def _method_name(symbol):
-    """Get the name of the C++ method from its symbol."""
-    # TODO: Extracting the method name from a C++ symbol should probably be done in a symbol
-    # module.
-    try:
-        demangled  = idc.Demangle(symbol, idc.GetLongPrm(idc.INF_SHORT_DN))
-        func       = demangled.split('::', 1)[1]
-        base       = func.split('(', 1)[0]
-        return base or None
-    except:
-        return None
-
-def make_ident(name):
-    """Convert a name into a valid identifier, substituting any invalid characters."""
-    ident = ''
-    for c in name:
-        if idaapi.is_ident_char(c):
-            ident += c
-        else:
-            ident += '_'
-    return ident
 
 def _populate_vmethods_struct(sid, classinfo):
     """Populate the ::vmethods struct."""
@@ -164,12 +143,11 @@ def _populate_vmethods_struct(sid, classinfo):
         if index < super_nmethods:
             continue
         # Get the base name of the method (i.e., for Class::method(args), extract method).
-        symbol = idau.get_ea_name(vmethod, user=True)
-        base   = _method_name(symbol)
-        if base:
-            base = make_ident(base)
-        else:
+        sym  = idau.get_ea_name(vmethod, user=True)
+        base = symbol.method_name(sym)
+        if not base:
             base = 'method_{}'.format(index)
+        base = symbol.make_ident(base)
         # We'll try to use the base as our method name, but if it already exists, try appending
         # "_1", "_2", etc.
         name   = base

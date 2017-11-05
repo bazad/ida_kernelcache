@@ -88,7 +88,7 @@ def _symbolicate_stub(stub, target, next_stub):
     # stub reference is that these jump functions are really wrappers with different names and
     # semantics in the original code, so it's not appropriate for us to cover that up with a stub.
     if symbol_references_stub(name):
-        _log(1, 'Stub {:#x} has target {:#x} (name {}) that references another stub', stub, target,
+        _log(2, 'Stub {:#x} has target {:#x} (name {}) that references another stub', stub, target,
                 name)
         return False
     symbol = next_stub(name)

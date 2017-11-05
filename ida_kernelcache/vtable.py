@@ -10,6 +10,7 @@ from itertools import islice, takewhile
 import idc
 import idautils
 
+from symbol import vtable_symbol_for_class
 import ida_utilities as idau
 import classes
 import stub
@@ -137,27 +138,6 @@ def initialize_vtables():
         if not convert_vtable_to_offsets(vtable, length):
             _log(0, 'Could not convert vtable at address {:x} into offsets', vtable)
         _convert_vtable_methods_to_functions(vtable, length)
-
-def vtable_symbol_for_class(classname):
-    """Get the symbol name for the vtable for the given class name.
-
-    Arguments:
-        classname: The name of the C++ class.
-
-    Returns:
-        The symbol name, or None if the classname is invalid.
-    """
-    scopes = classname.split('::')
-    symbol = '__ZTV'
-    if len(scopes) > 1:
-        symbol += 'N'
-    for name in scopes:
-        if len(name) == 0:
-            return None
-        symbol += '{}{}'.format(len(name), name)
-    if len(scopes) > 1:
-        symbol += 'E'
-    return symbol
 
 def add_vtable_symbol(vtable, classname):
     """Add a symbol for the virtual method table at the specified address.

@@ -9,6 +9,7 @@ import idc
 
 import ida_utilities as idau
 import classes
+import symbol
 
 _log = idau.make_log(0, __name__)
 
@@ -36,17 +37,7 @@ def metaclass_symbol_for_class(classname):
     metaclass_instance = metaclass_instance_name_for_class(classname)
     if not metaclass_instance:
         return None
-    scopes = metaclass_instance.split('::')
-    symbol = '__Z'
-    if len(scopes) > 1:
-        symbol += 'N'
-    for name in scopes:
-        if len(name) == 0:
-            return None
-        symbol += '{}{}'.format(len(name), name)
-    if len(scopes) > 1:
-        symbol += 'E'
-    return symbol
+    return symbol.global_name(metaclass_instance)
 
 OK = False
 """Whether this module seems to be working."""

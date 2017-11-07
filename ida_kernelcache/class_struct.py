@@ -368,7 +368,8 @@ def _collect_all_class_accesses(functions):
     """
     all_accesses = collections.defaultdict(lambda: collections.defaultdict(set))
     for function, classname, register in functions:
-        data_flow.pointer_accesses(func=function, reg=register, accesses=all_accesses[classname])
+        data_flow.pointer_accesses(function=function, initialization={ function: { register: 0 } },
+                accesses=all_accesses[classname])
     return all_accesses
 
 def _classify_class_accesses(all_accesses, style):

@@ -298,7 +298,7 @@ def read_word(ea, wordsize=WORD_SIZE):
     raise ValueError('Invalid argument: wordsize={}'.format(wordsize))
 
 class objectview(object):
-    """A class to present an object-like view of a dictionary."""
+    """A class to present an object-like view of a struct."""
     # https://goodcode.io/articles/python-dict-object/
     def __init__(self, fields, addr, size):
         self.__dict__ = fields

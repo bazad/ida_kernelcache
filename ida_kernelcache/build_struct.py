@@ -13,7 +13,7 @@ import idaapi
 
 import ida_utilities as idau
 
-_log = idau.make_log(1, __name__)
+_log = idau.make_log(3, __name__)
 
 def field_name(offset):
     """Automatically generated IDA structs have their fields named by their absolute offset."""

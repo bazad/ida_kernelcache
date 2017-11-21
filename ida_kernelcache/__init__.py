@@ -9,6 +9,7 @@
 # scripts.
 import ida_utilities
 
+import build_struct
 import class_struct
 import classes
 import kernel

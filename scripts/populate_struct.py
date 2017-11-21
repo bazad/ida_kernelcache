@@ -2,7 +2,7 @@
 # scripts/populate_struct.py
 # Brandon Azad
 #
-# Populate a struct using data flow analysis.
+# Populate a class or struct using data flow analysis.
 #
 
 def kernelcache_populate_struct(struct=None, address=None, register=None, delta=None):
@@ -35,7 +35,7 @@ Automatically populate struct fields
     if any(arg is None for arg in (struct, address, register, delta)):
         f = MyForm()
         f.Compile()
-        f.structure.value = struct or 'struc'
+        f.structure.value = struct or ''
         f.address.value   = address or idc.ScreenEA()
         f.register.value  = register or 'X0'
         f.delta.value     = delta or 0
@@ -48,6 +48,10 @@ Automatically populate struct fields
         register = f.register.value
         delta    = f.delta.value
         f.Free()
+
+    # Check whether this struct is a class.
+    kc.collect_class_info()
+    is_class = struct in kc.class_info
 
     # Open the structure.
     sid = idau.struct_open(struct, create=True)
@@ -75,23 +79,31 @@ Automatically populate struct fields
     if delta < 0 or delta > 0x1000000:
         print 'Invalid delta {}'.format(delta)
         return False
+    elif is_class and delta != 0:
+        print 'Nonzero delta not yet supported'
+        return False
 
-    print 'struct = {}, address = {:#x}, register = {}, delta = {:#x}'.format(struct, address,
-            register, delta)
+    type_name = 'class' if is_class else 'struct'
+    print '{} = {}, address = {:#x}, register = {}, delta = {:#x}'.format(type_name, struct,
+            address, register, delta)
 
-    # Run the data flow to collect the accesses and then add those fields to the struct.
-    accesses = kc.data_flow.pointer_accesses(function=address,
-            initialization={ address: { register_id: delta } })
-    kc.build_struct.create_struct_fields(sid, accesses=accesses)
+    if is_class:
+        # Run the analysis.
+        kc.class_struct.process_functions([(address, struct, register_id)])
+    else:
+        # Run the data flow to collect the accesses and then add those fields to the struct.
+        accesses = kc.data_flow.pointer_accesses(function=address,
+                initialization={ address: { register_id: delta } })
+        kc.build_struct.create_struct_fields(sid, accesses=accesses)
 
-    # Set the offsets to stroff.
-    for addresses_and_deltas in accesses.values():
-        for ea, delta in addresses_and_deltas:
-            insn = idautils.DecodeInstruction(ea)
-            if insn:
-                for op in insn.Operands:
-                    if op.type == idaapi.o_displ:
-                        idc.OpStroffEx(ea, op.n, sid, delta)
+        # Set the offsets to stroff.
+        for addresses_and_deltas in accesses.values():
+            for ea, delta in addresses_and_deltas:
+                insn = idautils.DecodeInstruction(ea)
+                if insn:
+                    for op in insn.Operands:
+                        if op.type == idaapi.o_displ:
+                            idc.OpStroffEx(ea, op.n, sid, delta)
 
     # All done! :)
     print 'Done'

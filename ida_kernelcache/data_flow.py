@@ -4,6 +4,16 @@
 #
 # A module for data flows.
 #
+"""ida_kernelcache.data_flow
+
+This module contains functions that perform various types of data flow operations on functions or
+code ranges. Currently only Arm64 is supported.
+
+While it is possible to implement a very generic data flow framework, allowing custom data flows to
+be implemented entirely externally and with little or no knowledge of the underlying architecture,
+this module does not take that approach, for reasons of simplicity and efficiency.
+
+"""
 
 import collections
 
@@ -33,8 +43,8 @@ _INSN_OP_DTYP_SZ = {
 
 _ARM64_WRITEBACK = 0x20 | 0x80
 
-def _pointer_accesses_create_flow(function, bounds):
-    """Create the flow for pointer_accesses."""
+def _create_flow(function, bounds):
+    """Create a FlowChart."""
     f, b = None, None
     if function is not None:
         f = idaapi.get_func(function)
@@ -44,6 +54,15 @@ def _pointer_accesses_create_flow(function, bounds):
     if bounds is not None:
         b = (start, end)
     return idaapi.FlowChart(f=f, bounds=b)
+
+def _add_blocks_to_queue(queue, flow, addresses):
+    for ea in addresses:
+        for bb in flow:
+            if bb.startEA <= ea < bb.endEA:
+                queue.append(bb)
+                break
+        else:
+            _log(2, 'Address {:#x} not contained in any basic block', ea)
 
 def _pointer_accesses_process_block(start, end, fix, entry_regs, accesses):
     """Process a basic block for _pointer_accesses_data_flow.
@@ -131,13 +150,7 @@ def _pointer_accesses_data_flow(flow, initialization, accesses):
     bb_regs = { bb.id: {} for bb in flow }
     # We'll start by processing those blocks that have an initial value.
     queue = collections.deque()
-    for ea in initialization:
-        for bb in flow:
-            if bb.startEA <= ea < bb.endEA:
-                queue.append(bb)
-                break
-        else:
-            _log(2, 'Address {:#x} not contained in any basic block', ea)
+    _add_blocks_to_queue(queue, flow, initialization)
     # Process each block, propagating its set of registers to its successors. This isn't quite a
     # true data flow: We should run it until there are no more changes, then check the accesses
     # conditions only once it's stabilized. The difference occurs when we've processed block A,
@@ -212,7 +225,7 @@ def pointer_accesses(function=None, bounds=None, initialization=None, accesses=N
             { 0x4000: { 10: 144 } }
     """
     # Create the FlowChart.
-    flow = _pointer_accesses_create_flow(function, bounds)
+    flow = _create_flow(function, bounds)
     if flow is None:
         return None
     # Get the set of (offset, size) accesses by running a data flow.

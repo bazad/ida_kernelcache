@@ -83,13 +83,11 @@ def collect_class_info():
     """Collect information about C++ classes defined in a kernelcache.
 
     This function searches through an iOS kernelcache for information about the C++ classes defined
-    in it. It returns a dictionary that maps the C++ class names to a ClassInfo object containing
-    metainformation about the class.
+    in it. It populates the global class_info dictionary, which maps the C++ class names to a
+    ClassInfo object containing metainformation about the class.
 
-    The result of this function call is cached in the class_info global dictionary. If this
-    dictionary is nonempty, this function will return its value rather than re-examining the
-    kernelcache. To force re-evaluation of this function, clear the class_info dictionary with
-    class_info.clear().
+    To force re-evaluation of the class_info dictionary, call class_info.clear() and then re-run
+    this function.
 
     This function also collects the set of all virtual method tables identified in the kernelcache,
     even if the corresponding class could not be identified. A mapping from each virtual method
@@ -107,4 +105,3 @@ def collect_class_info():
             all_class_info, all_vtables = result
             class_info.update(all_class_info)
             vtables.update(all_vtables)
-    return class_info

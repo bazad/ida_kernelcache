@@ -12,19 +12,71 @@ def kernelcache_process_external_methods(ea=None, struct_type=None, count=None):
     import ida_kernelcache as kc
     import ida_kernelcache.ida_utilities as idau
 
+    kIOUCVariableStructureSize = 0xffffffff
+
+    kIOUCTypeMask = 0xf
+    kIOUCScalarIScalarO = 0
+    kIOUCScalarIStructO = 2
+    kIOUCStructIStructO = 3
+    kIOUCScalarIStructI = 4
+
+    kIOUCFlags = 0xff
+
+    IOExternalMethod_types = (kIOUCScalarIScalarO, kIOUCScalarIStructO, kIOUCStructIStructO,
+            kIOUCScalarIStructI)
+
+    IOExternalMethod_count0_scalar = (kIOUCScalarIScalarO, kIOUCScalarIStructO,
+            kIOUCScalarIStructI)
+
+    IOExternalMethod_count1_scalar = (kIOUCScalarIScalarO,)
+
+    def check_scalar(scalar_count):
+        return (0 <= scalar_count <= 400)
+
+    def check_structure(structure_size):
+        return (0 <= structure_size <= 0x100000 or structure_size == kIOUCVariableStructureSize)
+
     def is_IOExternalMethodDispatch(obj):
-        VAR = 0xffffffff
         return (idau.is_mapped(obj.function)
-                and (0 <= obj.checkScalarInputCount <= 400 or obj.checkScalarInputCount == VAR)
-                and (0 <= obj.checkScalarOutputCount <= 400 or obj.checkScalarOutputCount == VAR))
+                and check_scalar(obj.checkScalarInputCount)
+                and check_structure(obj.checkStructureInputSize)
+                and check_scalar(obj.checkScalarOutputCount)
+                and check_structure(obj.checkStructureOutputSize))
 
     def process_IOExternalMethodDispatch(obj):
         return (obj.checkScalarInputCount, obj.checkStructureInputSize,
                 obj.checkScalarOutputCount, obj.checkStructureOutputSize)
 
+    def is_IOExternalMethod(obj):
+        method_type = obj.flags & kIOUCTypeMask
+        check_count0 = check_scalar if method_type in IOExternalMethod_count0_scalar else check_structure
+        check_count1 = check_scalar if method_type in IOExternalMethod_count1_scalar else check_structure
+        return ((obj.object == 0 or idau.is_mapped(obj.object))
+                and (obj.flags & kIOUCFlags == obj.flags)
+                and idau.is_mapped(obj.func)
+                and method_type in IOExternalMethod_types
+                and check_count0(obj.count0)
+                and check_count1(obj.count1))
+
+    def process_IOExternalMethod(obj):
+        isc, iss, osc, oss = 0, 0, 0, 0
+        method_type = obj.flags & kIOUCTypeMask
+        if method_type == kIOUCScalarIScalarO:
+            isc, osc = obj.count0, obj.count1
+        elif method_type == kIOUCScalarIStructO:
+            isc, oss = obj.count0, obj.count1
+        elif method_type == kIOUCStructIStructO:
+            iss, oss = obj.count0, obj.count1
+        elif method_type == kIOUCScalarIStructI:
+            isc, iss = obj.count0, obj.count1
+        else:
+            assert False
+        return (isc, iss, osc, oss)
+
     TYPE_MAP = {
             'IOExternalMethodDispatch':
                 (is_IOExternalMethodDispatch, process_IOExternalMethodDispatch),
+            'IOExternalMethod': (is_IOExternalMethod, process_IOExternalMethod),
     }
 
     # Get the EA.

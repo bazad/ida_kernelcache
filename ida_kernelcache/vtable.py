@@ -375,7 +375,7 @@ def initialize_vtable_method_symbols():
     Propagate symbol names from the virtual method tables of the base classes.
     """
     processed = set()
-    class_info_map = classes.collect_class_info()
-    for classinfo in class_info_map.values():
+    classes.collect_class_info()
+    for classinfo in classes.class_info.values():
         _symbolicate_overrides_for_classinfo(classinfo, processed)
 

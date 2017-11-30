@@ -15,9 +15,10 @@ def make_log(log_level, module):
     """Create a logging function."""
     def log(level, *args):
         if len(args) == 0:
-            return level <= log_level
-        if level <= log_level:
+            return level <= log.level
+        if level <= log.level:
             print module + ': ' + args[0].format(*args[1:])
+    log.level = log_level
     return log
 
 _log = make_log(1, __name__)

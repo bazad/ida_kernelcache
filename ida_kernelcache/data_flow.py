@@ -68,8 +68,23 @@ def _pointer_accesses_process_block(start, end, fix, entry_regs, accesses):
     """Process a basic block for _pointer_accesses_data_flow.
 
     Arm64 only."""
+    # NOTE: Some object accesses (to large offsets) are encoded in the following style:
+    #   MOV             W8, #0x9210
+    #   STR             X0, [X19,X8]
+    # We try to catch these by keeping track of local constants within a block.
+    RegValue = collections.namedtuple('RegValue', ['type', 'value'])
+    DELTA = 0   # Pointer delta from start of target memory region.
+    CONST = 1   # Constant value
+    def get_reg(reg, type):
+        rv = regs.get(reg, None)
+        if rv is None or rv.type != type:
+            return None
+        return rv.value
+
+    # Initialize our registers and create accessor functions.
+    regs = { reg: RegValue(DELTA, delta) for reg, delta in entry_regs.items() }
+
     # For each instruction in the basic block, see if any new register gets assigned.
-    regs = entry_regs.copy()
     for insn in idau.Instructions(start, end):
         # First, if this instruction has a fixed state (i.e., a set mapping of registers to
         # deltas), set that state. This overwrites any previous values, so care must be taken by
@@ -78,21 +93,39 @@ def _pointer_accesses_process_block(start, end, fix, entry_regs, accesses):
         if fixed_regs_and_deltas:
             for reg, delta in fixed_regs_and_deltas.items():
                 _log(6, '\t\t{:x}  fix {}={}', insn.ea, reg, delta)
-                regs[reg] = delta
+                regs[reg] = RegValue(DELTA, delta)
         # If this is an access instruction, record the access. See comment about auxpref below.
         if not (insn.auxpref & _ARM64_WRITEBACK):
             for op in insn.Operands:
+                # We only consider o_displ and o_phrase.
                 if op.type == idaapi.o_void:
                     break
+                elif op.type not in (idaapi.o_displ, idaapi.o_phrase):
+                    continue
+                # Get the delta for the base register.
+                delta = get_reg(op.reg, DELTA)
+                if delta is None:
+                    continue
+                # Get the instruction access size.
+                size = _INSN_OP_DTYP_SZ.get(op.dtyp)
+                if size is None:
+                    continue
+                # Get the offset from the base register (which is additional to the base register's
+                # delta).
+                op_offset = None
                 if op.type == idaapi.o_displ:
-                    delta = regs.get(op.reg)
-                    if delta is not None:
-                        size = _INSN_OP_DTYP_SZ.get(op.dtyp)
-                        if size is not None:
-                            offset = (delta + op.addr) & 0xffffffffffffffff
-                            _log(5, '\t\t{:x}  access({})  {}, {}', insn.ea, op.reg, offset, size)
-                            accesses[(offset, size)].add((insn.ea, delta))
-        # Update the set of registers pointing to the struct.
+                    op_offset = op.addr
+                else: # op.type == idaapi.o_phrase
+                    op_offset_reg = op.specflag1 & 0xff
+                    op_offset = get_reg(op_offset_reg, CONST)
+                if op_offset is None:
+                    continue
+                # Record this access.
+                offset = (delta + op_offset) & 0xffffffffffffffff
+                _log(5, '\t\t{:x}  access({})  {}, {}', insn.ea, op.reg, offset, size)
+                accesses[(offset, size)].add((insn.ea, delta))
+        # Update the set of registers pointing to the struct, and the set of known constant
+        # registers.
         if (insn.itype == idaapi.ARM_mov
                 and insn.Op1.type == idaapi.o_reg
                 and insn.Op2.type == idaapi.o_reg
@@ -101,8 +134,16 @@ def _pointer_accesses_process_block(start, end, fix, entry_regs, accesses):
                 and insn.Op2.dtyp == idaapi.dt_qword
                 and insn.Op2.reg in regs):
             # MOV Xdst, Xsrc
-            _log(6, '\t\t{:x}  add {}={}', insn.ea, insn.Op1.reg, regs[insn.Op2.reg])
+            _log(6, '\t\t{:x}  add {}={}', insn.ea, insn.Op1.reg, regs[insn.Op2.reg].value)
             regs[insn.Op1.reg] = regs[insn.Op2.reg]
+        elif (insn.itype == idaapi.ARM_mov
+                and insn.Op1.type == idaapi.o_reg
+                and insn.Op2.type == idaapi.o_imm
+                and insn.Op3.type == idaapi.o_void
+                and insn.Op1.dtyp in (idaapi.dt_dword, idaapi.dt_qword)):
+            # MOV Xdst, #imm
+            _log(7, '\t\t{:x}  const {}={}', insn.ea, insn.Op1.reg, insn.Op2.value)
+            regs[insn.Op1.reg] = RegValue(CONST, insn.Op2.value)
         elif (insn.itype == idaapi.ARM_add
                 and insn.Op1.type == idaapi.o_reg
                 and insn.Op2.type == idaapi.o_reg
@@ -112,9 +153,9 @@ def _pointer_accesses_process_block(start, end, fix, entry_regs, accesses):
                 and insn.Op2.dtyp == idaapi.dt_qword
                 and insn.Op2.reg in regs):
             # ADD Xdst, Xsrc, #amt
-            _log(6, '\t\t{:x}  add {}={}+{}', insn.ea, insn.Op1.reg, regs[insn.Op2.reg],
-                    insn.Op3.value)
-            regs[insn.Op1.reg] = regs[insn.Op2.reg] + insn.Op3.value
+            op2 = regs[insn.Op2.reg]
+            _log(6, '\t\t{:x}  add {}={}+{}', insn.ea, insn.Op1.reg, op2.value, insn.Op3.value)
+            regs[insn.Op1.reg] = RegValue(op2.type, op2.value + insn.Op3.value)
         elif (insn.itype == idaapi.ARM_bl or insn.itype == idaapi.ARM_blr):
             # A function call (direct or indirect). Any correct compiler should generate code that
             # does not use the temporary registers after a call, but just to be safe, clear all the
@@ -140,7 +181,7 @@ def _pointer_accesses_process_block(start, end, fix, entry_regs, accesses):
                         or (insn.auxpref & _ARM64_WRITEBACK and op.type == idaapi.o_displ)):
                     _log(6, '\t\t{:x}  clear {}', insn.ea, op.reg)
                     regs.pop(op.reg, None)
-    return regs
+    return { reg: rv.value for reg, rv in regs.items() if rv.type == DELTA }
 
 def _pointer_accesses_data_flow(flow, initialization, accesses):
     """Run the data flow for pointer_accesses."""

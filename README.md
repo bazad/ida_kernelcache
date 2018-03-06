@@ -159,6 +159,14 @@ when reverse engineering the kernelcache. They include:
 A script to find descendants of a class that override a virtual method containing the specified
 string. Matching overrides are printed to the console.
 
+* **populate_struct.py**:
+Populate fields for a C++ class or C struct by performing data flow analysis starting at the
+current address.
+
+* **process_external_methods.py**:
+Process an `IOExternalMethod` or `IOExternalMethodDispatch` array into a standard form for use by
+fuzzing tools.
+
 ## A note on generalizing
 
 Some of this functionality likely applies more broadly than just to Apple kernelcaches (for
@@ -173,3 +181,6 @@ ida_kernelcache is released under the MIT license.
 Much of the functionality in ida_kernelcache is borrowed from [memctl], which is also released
 under the MIT license. Other sources are noted in the comments in the corresponding files.
 
+
+---------------------------------------------------------------------------------------------------
+Brandon Azad

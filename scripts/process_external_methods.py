@@ -99,6 +99,9 @@ def kernelcache_process_external_methods(ea=None, struct_type=None, count=None):
             print 'Unknown external method struct type {}'.format(struct_type)
             return False
         check, process = TYPE_MAP[struct_type]
+        obj = idau.read_struct(ea, struct=struct_type, asobject=True)
+        if not check(obj):
+            print 'Address {:#x} does not look like {}'.format(ea, struct_type)
 
     # Process the external methods.
     selector = 0;

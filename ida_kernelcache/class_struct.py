@@ -59,7 +59,8 @@ union organized as follows:
 There are advantages and disadvantages to each representation. The unions representation can be
 more flexible if the automated analysis messes up, but so far I have not found a good way to set
 the operands of instructions referring to these structures.
-TODO: I know it's possible with ida_bytes.op_stroff(), I just need to implement it.
+
+TODO: I know it's probably possible with ida_bytes.op_stroff().
 
 We divide the processing into two parts: vtable generation and class generation.
 
@@ -74,7 +75,8 @@ struct, then use that information to reconstruct the class fields. Most of the w
 data_flow module, which collects (offset, size) pairs for each virtual method in the class. We
 partiton those accesses to their respective classes by class size. (This is not perfect since the
 class size reported in the kernel may actually be rounded up. However, for the most part it works
-quite well.) Once we know which (offset, size) pairs correspond to which class, we use 
+quite well.) Once we know which (offset, size) pairs correspond to which class, we use the
+build_struct module to create the appropriate fields in the struct for those accesses.
 
 Rationale:
 

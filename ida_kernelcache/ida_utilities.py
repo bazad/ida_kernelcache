@@ -42,7 +42,10 @@ def _initialize():
         WORD_SIZE = 4
     else:
         WORD_SIZE = 2
-    BIG_ENDIAN    = info.mf
+    try:
+        BIG_ENDIAN = info.is_be()
+    except:
+        BIG_ENDIAN = info.mf
     LITTLE_ENDIAN = not BIG_ENDIAN
 
 _initialize()

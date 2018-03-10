@@ -5,16 +5,16 @@
 ida_kernelcache is an IDAPython module for IDA Pro to make working with iOS kernelcaches easier.
 The module provides functions to:
 
-* Parse the kernel's `__PRELINK_INFO` segment into a Python dictionary
+* Parse the kernel's `__PRELINK_INFO` segment into a Python dictionary.
 * Rename the segments in IDA according to the kernel extension name, Mach-O segment, and Mach-O
-  section
-* Convert identifiable pointers in some segments into IDA offsets
-* Reconstruct the C++ class hierarchy based on OSMetaClass information
-* Symbolicate C++ virtual method tables (both the vtable itself and its methods)
-* Symbolicate offsets in `__got` sections and stub functions in `__stubs` sections
-* Autogenerate IDA structs representing the C++ virtual method tables
+  section.
+* Convert identifiable pointers in some segments into IDA offsets.
+* Reconstruct the C++ class hierarchy based on OSMetaClass information.
+* Symbolicate C++ virtual method tables (both the vtable itself and its methods).
+* Symbolicate offsets in `__got` sections and stub functions in `__stubs` sections.
+* Autogenerate IDA structs representing the C++ virtual method tables.
 * Autogenerate IDA structs representing the C++ classes in the kernelcache based on observed access
-  patterns
+  patterns.
 
 The main processing function is designed to be run before any manual analysis or reverse
 engineering. With the default settings, IDA tends to miss a lot of useful information in the
@@ -28,8 +28,8 @@ Many of the techniques used in ida_kernelcache were developed for and borrowed d
 
 ## Versions
 
-I've tested ida_kernelcache with IDA Pro 6.95 on the iPhone 7 10.1.1 and 11.0 kernelcaches.
-Currently only Arm64 kernelcaches from iOS 10 and later are supported.
+ida_kernelcache has been tested with IDA Pro 6.95 on the iPhone 7 10.1.1, 11.0, and 11.2
+kernelcaches. Currently only Arm64 kernelcaches from iOS 10 and later are supported.
 
 ## Getting started
 
@@ -166,6 +166,16 @@ current address.
 * **process_external_methods.py**:
 Process an `IOExternalMethod` or `IOExternalMethodDispatch` array into a standard form for use by
 fuzzing tools.
+
+## Class reconstruction
+
+If you are using the Hex-Rays decompiler, one of the more interesting features of ida_kernelcache
+is the automatic C++ class reconstruction, which will use the OSMetaClass information and data flow
+analysis to create IDA structs to represent the classes found in the kernelcache. These
+representations can dramatically improve the readability of the pseudocode representation. To learn
+more, see the post [Reconstructing C++ classes in the iOS kernelcache using IDA Pro].
+
+[Reconstructing C++ classes in the iOS kernelcache using IDA Pro]: https://bazad.github.io/2018/03/ida-kernelcache-class-reconstruction/
 
 ## A note on generalizing
 

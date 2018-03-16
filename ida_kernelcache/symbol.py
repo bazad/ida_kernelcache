@@ -91,7 +91,7 @@ def make_ident(name):
     """Convert a name into a valid identifier, substituting any invalid characters."""
     ident = ''
     for c in name:
-        if idaapi.is_ident_char(c):
+        if idaapi.is_ident_char(ord(c)):
             ident += c
         else:
             ident += '_'

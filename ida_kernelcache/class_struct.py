@@ -446,7 +446,7 @@ def _convert_operands_to_struct_offsets(access_addresses):
                 if insn:
                     for op in insn.Operands:
                         if op.type == idaapi.o_displ:
-                            if not idc.OpStroffEx(ea, op.n, sid, delta):
+                            if not idc.OpStroffEx(insn, op.n, sid, delta):
                                 _log(1, 'Could not convert {:#x} to struct offset for class {} '
                                         'delta {}', ea, classname, delta)
 

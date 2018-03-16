@@ -431,7 +431,11 @@ def _convert_address_to_function(func):
             idc.AnalyseArea(item, itemend)
     else:
         # Just try removing the chunk from its current function.
-        idc.RemoveFchunk(func, func)
+        # IDA can add it to another function automatically, so make sure
+        # it's removed from all functions by doing it in loop until it
+        # fails
+        while idc.RemoveFchunk(func, func):
+            pass
     # Now try making a function.
     if idc.MakeFunction(func) != 0:
         return True

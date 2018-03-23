@@ -155,6 +155,19 @@ def set_ea_name(ea, name, rename=False, auto=False):
         flags |= idc.SN_AUTO
     return bool(idc.MakeNameEx(ea, name, flags))
 
+def _insn_op_stroff_700(insn, n, sid, delta):
+    """A wrapper of idc.OpStroffEx for IDA 7."""
+    return idc.OpStroffEx(insn, n, sid, delta)
+
+def _insn_op_stroff_695(insn, n, sid, delta):
+    """A wrapper of idc.OpStroffEx for IDA 6.95."""
+    return idc.OpStroffEx(insn.ea, n, sid, delta)
+
+if idaapi.IDA_SDK_VERSION < 700:
+    insn_op_stroff = _insn_op_stroff_695
+else:
+    insn_op_stroff = _insn_op_stroff_700
+
 def _addresses(start, end, step, partial, aligned):
     """A generator to iterate over the addresses in an address range."""
     addr = start
@@ -430,8 +443,12 @@ def _convert_address_to_function(func):
             idc.Wait()
             idc.AnalyseArea(item, itemend)
     else:
-        # Just try removing the chunk from its current function.
-        idc.RemoveFchunk(func, func)
+        # Just try removing the chunk from its current function. IDA can add it to another function
+        # automatically, so make sure it's removed from all functions by doing it in loop until it
+        # fails.
+        for i in range(1024):
+            if not idc.RemoveFchunk(func, func):
+                break
     # Now try making a function.
     if idc.MakeFunction(func) != 0:
         return True

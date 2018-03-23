@@ -52,7 +52,7 @@ class _Regs(object):
             pass
 
     def _reg(self, reg):
-        if type(reg) is int:
+        if isinstance(reg, (int, long)):
             reg = _Regs._reg_names[reg]
         return reg
 
@@ -64,7 +64,7 @@ class _Regs(object):
 
     def __setitem__(self, reg, value):
         if value is None or value is _Regs.Unknown:
-            self.clear(reg)
+            self.clear(self._reg(reg))
         else:
             self._regs[self._reg(reg)] = value & 0xffffffffffffffff
 

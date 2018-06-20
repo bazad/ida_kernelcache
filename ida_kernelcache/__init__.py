@@ -41,8 +41,6 @@ def kernelcache_process():
         print 'Waiting for IDA autoanalysis...'
         idc.Wait()
     autoanalyze()
-    # NOTE: Renaming the segments in IDA via segment.initialize_segments() is necessary for some of
-    # the other functions, which rely on the more detailed segment names.
     segment.initialize_segments()
     offset.initialize_data_offsets()
     autoanalyze()

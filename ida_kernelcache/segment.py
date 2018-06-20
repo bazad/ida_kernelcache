@@ -117,7 +117,9 @@ def initialize_segments():
     _log(1, 'Renaming kernel segments')
     kernel_skip = ['__PRELINK_TEXT', '__PLK_TEXT_EXEC', '__PRELINK_DATA', '__PLK_DATA_CONST']
     _initialize_segments_in_kext(None, kernel.base, skip=kernel_skip)
-    # Process each kext identified by the __PRELINK_INFO.
+    # Process each kext identified by the __PRELINK_INFO. In the new kernelcache format 12-merged,
+    # the _PrelinkExecutableLoadAddr key is missing for all kexts, so no extra segment renaming
+    # takes place.
     prelink_info_dicts = kernel.prelink_info['_PrelinkInfoDictionary']
     for kext_prelink_info in prelink_info_dicts:
         kext = kext_prelink_info.get('CFBundleIdentifier', None)
@@ -134,6 +136,7 @@ def kernelcache_kext(ea):
 
     Only works if segments have been renamed using initialize_segments().
     """
+    # TODO: This doesn't work on 12-merged kernelcaches!
     name = idc.SegName(ea) or ''
     if ':' in name:
         return idc.SegName(ea).split(':', 1)[0]

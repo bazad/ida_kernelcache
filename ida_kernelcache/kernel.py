@@ -56,3 +56,13 @@ def parse_prelink_info():
 prelink_info = parse_prelink_info()
 """The kernel __PRELINK_INFO dictionary."""
 
+KC_11_NORMAL = '11-normal'
+KC_12_MERGED = '12-merged'
+
+def _get_kernelcache_format():
+    if '_PrelinkLinkKASLROffsets' in prelink_info:
+        return KC_11_NORMAL
+    return KC_12_MERGED
+
+kernelcache_format = _get_kernelcache_format()
+

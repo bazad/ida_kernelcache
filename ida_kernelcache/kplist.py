@@ -202,8 +202,11 @@ class _KPlistBuilder(object):
 
 def kplist_parse(plist):
     """Parse a kernel-style property list."""
-    builder = _KPlistBuilder()
-    parser  = XMLTreeBuilder(target=builder)
-    parser.feed(plist)
-    return parser.close()
+    try:
+        builder = _KPlistBuilder()
+        parser  = XMLTreeBuilder(target=builder)
+        parser.feed(plist)
+        return parser.close()
+    except:
+        return None
 

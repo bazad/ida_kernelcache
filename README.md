@@ -5,6 +5,7 @@
 ida_kernelcache is an IDAPython module for IDA Pro to make working with iOS kernelcaches easier.
 The module provides functions to:
 
+* Convert iOS 12's new static tagged pointers into normal kernel pointers.
 * Parse the kernel's `__PRELINK_INFO` segment into a Python dictionary.
 * Rename the segments in IDA according to the kernel extension name, Mach-O segment, and Mach-O
   section.
@@ -30,6 +31,8 @@ Many of the techniques used in ida_kernelcache were developed for and borrowed d
 
 ida_kernelcache has been tested with IDA Pro 6.95 on the iPhone 7 10.1.1, 11.0, and 11.2
 kernelcaches. Currently only Arm64 kernelcaches from iOS 10 and later are supported.
+
+The new iOS 12 kernelcache format is not yet fully supported.
 
 ## Getting started
 
@@ -176,6 +179,16 @@ representations can dramatically improve the readability of the pseudocode repre
 more, see the post [Reconstructing C++ classes in the iOS kernelcache using IDA Pro].
 
 [Reconstructing C++ classes in the iOS kernelcache using IDA Pro]: https://bazad.github.io/2018/03/ida-kernelcache-class-reconstruction/
+
+## The new iOS 12 kernelcache format
+
+With iOS 12, Apple introduced a new kernelcache format on some devices. Among the changes, this new
+kernelcache's kernel pointers are tagged to link them in a list, presumably to allow iBoot to slide
+the kernel without the `_PrelinkLinkKASLROffsets` data in the prelink dictionary. Trying to analyze
+a stock kernelcache using this format in IDA is difficult due to the missing cross-references. See
+the article [Analyzing the iOS 12 kernelcache's tagged pointers] for details.
+
+[Analyzing the iOS 12 kernelcache's tagged pointers]: https://bazad.github.io/2018/06/ios-12-kernelcache-tagged-pointers/
 
 ## A note on generalizing
 

@@ -12,6 +12,7 @@ import idautils
 
 import ida_utilities as idau
 import internal
+import kernel
 import stub
 
 _log = idau.make_log(1, __name__)
@@ -19,8 +20,11 @@ _log = idau.make_log(1, __name__)
 def initialize_data_offsets():
     """Convert offsets in data segments into offsets in IDA.
 
+    This function should only be run on 11-normal style kernelcaches.
+
     Segment names must be initialized with segments.initialize_segments() first.
     """
+    assert kernel.kernelcache_format == kernel.KC_11_NORMAL, 'Wrong kernelcache format'
     # Normally, for user-space programs, this operation would be dangerous because there's a good
     # chance that a valid userspace address would happen to show up in regular program data that is
     # not actually an address. However, since kernel addresses are numerically much larger, the

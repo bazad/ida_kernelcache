@@ -314,6 +314,23 @@ def read_word(ea, wordsize=WORD_SIZE):
         return idc.Qword(ea)
     raise ValueError('Invalid argument: wordsize={}'.format(wordsize))
 
+def patch_word(ea, value, wordsize=WORD_SIZE):
+    """Patch the word at the given address.
+
+    Words are patched using PatchByte(), PatchWord(), PatchDword(), or PatchQword(), as
+    appropriate.
+    """
+    if wordsize == 1:
+        idc.PatchByte(ea, value)
+    elif wordsize == 2:
+        idc.PatchWord(ea, value)
+    elif wordsize == 4:
+        idc.PatchDword(ea, value)
+    elif wordsize == 8:
+        idc.PatchQword(ea, value)
+    else:
+        raise ValueError('Invalid argument: wordsize={}'.format(wordsize))
+
 class objectview(object):
     """A class to present an object-like view of a struct."""
     # https://goodcode.io/articles/python-dict-object/
@@ -484,7 +501,7 @@ def force_function(addr):
         return True
     return _convert_address_to_function(addr)
 
-def ReadWords(start, end, wordsize=WORD_SIZE, addresses=False):
+def ReadWords(start, end, step=WORD_SIZE, wordsize=WORD_SIZE, addresses=False):
     """A generator to iterate over the data words in the given address range.
 
     The iterator returns a stream of words or tuples for each mapped word in the address range.
@@ -495,12 +512,13 @@ def ReadWords(start, end, wordsize=WORD_SIZE, addresses=False):
         end: The end address.
 
     Options:
+        step: The number of bytes to advance per iteration. Default is WORD_SIZE.
         wordsize: The word size to read, in bytes. Default is WORD_SIZE.
         addresses: If true, then the iterator will return a stream of tuples (word, ea) for each
             mapped word in the address range. Otherwise, just the word itself will be returned.
             Default is False.
     """
-    for addr in Addresses(start, end, step=wordsize, unmapped=True):
+    for addr in Addresses(start, end, step=step, unmapped=True):
         word = read_word(addr, wordsize)
         if word is None:
             break

@@ -18,6 +18,7 @@ import metaclass
 import offset
 import segment
 import stub
+import tagged_pointers
 import vtable
 
 from classes import (ClassInfo, collect_class_info, class_info)
@@ -41,9 +42,13 @@ def kernelcache_process():
         print 'Waiting for IDA autoanalysis...'
         idc.Wait()
     autoanalyze()
+    if kernel.kernelcache_format == kernel.KC_12_MERGED:
+        tagged_pointers.untag_pointers()
+        autoanalyze()
     segment.initialize_segments()
-    offset.initialize_data_offsets()
-    autoanalyze()
+    if kernel.kernelcache_format == kernel.KC_11_NORMAL:
+        offset.initialize_data_offsets()
+        autoanalyze()
     vtable.initialize_vtables()
     autoanalyze()
     vtable.initialize_vtable_symbols()

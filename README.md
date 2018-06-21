@@ -192,6 +192,9 @@ the article [Analyzing the iOS 12 kernelcache's tagged pointers] for details.
 
 [Analyzing the iOS 12 kernelcache's tagged pointers]: https://bazad.github.io/2018/06/ios-12-kernelcache-tagged-pointers/
 
+If you just want to untag the pointers in the kernelcache without performing any additional
+processing, run `kc.tagged_pointers.untag_pointers()`.
+
 ## A note on generalizing
 
 Some of this functionality likely applies more broadly than just to Apple kernelcaches (for

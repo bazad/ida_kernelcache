@@ -25,23 +25,26 @@ from classes import (ClassInfo, collect_class_info, class_info)
 from kplist  import (kplist_parse)
 from segment import (kernelcache_kext)
 
-def kernelcache_process():
+def kernelcache_process(untag_pointers=True):
     """Process the kernelcache in IDA for the first time.
 
     This function performs all the standard processing available in this module:
-        * Renames segments in IDA according to the names from the __PRELINK_INFO dictionary.
+        * Convert iOS 12's new static tagged pointers into normal kernel pointers.
+        * Parse the kernel's `__PRELINK_INFO.__info` section into a dictionary.
+        * Renames segments in IDA according to the names from the __PRELINK_INFO dictionary (split
+          kext format kernelcaches only).
+        * Converts pointers in data segments into offsets.
         * Locates virtual method tables, converts them to offsets, and adds vtable symbols.
         * Locates OSMetaClass instances for top-level classes and adds OSMetaClass symbols.
-        * Converts __got sections into offsets and automatically renames them.
-        * Converts __stubs sections into stub functions and automatically renames them.
-        * Symbolicates virtual method tables based on the method names in superclasses.
+        * Symbolicates offsets in `__got` sections and stub functions in `__stubs` sections.
+        * Symbolicates methods in vtables based on the method names in superclasses.
         * Creates IDA structs representing the C++ classes in the kernel.
     """
     import idc
     def autoanalyze():
         idc.Wait()
     autoanalyze()
-    if kernel.kernelcache_format == kernel.KC_12_MERGED:
+    if kernel.kernelcache_format == kernel.KC_12_MERGED and untag_pointers:
         print 'Processing tagged kernelcache pointers'
         tagged_pointers.untag_pointers()
         autoanalyze()

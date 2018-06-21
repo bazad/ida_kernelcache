@@ -39,26 +39,32 @@ def kernelcache_process():
     """
     import idc
     def autoanalyze():
-        print 'Waiting for IDA autoanalysis...'
         idc.Wait()
     autoanalyze()
     if kernel.kernelcache_format == kernel.KC_12_MERGED:
+        print 'Processing tagged kernelcache pointers'
         tagged_pointers.untag_pointers()
         autoanalyze()
     segment.initialize_segments()
     if kernel.kernelcache_format == kernel.KC_11_NORMAL:
+        print 'Initializing data offsets'
         offset.initialize_data_offsets()
         autoanalyze()
+    print 'Initializing vtables'
     vtable.initialize_vtables()
     autoanalyze()
     vtable.initialize_vtable_symbols()
     autoanalyze()
     metaclass.initialize_metaclass_symbols()
-    offset.initialize_offset_symbols()
-    autoanalyze()
-    stub.initialize_stub_symbols()
-    autoanalyze()
+    if kernel.kernelcache_format == kernel.KC_11_NORMAL:
+        print 'Creating offset and stub symbols'
+        offset.initialize_offset_symbols()
+        autoanalyze()
+        stub.initialize_stub_symbols()
+        autoanalyze()
+    print 'Propagating vtable method symbols'
     vtable.initialize_vtable_method_symbols()
+    print 'Initializing class structs'
     class_struct.initialize_vtable_structs()
     class_struct.initialize_class_structs()
     autoanalyze()

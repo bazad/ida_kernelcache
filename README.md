@@ -22,6 +22,10 @@ engineering. With the default settings, IDA tends to miss a lot of useful inform
 kernelcache. These scripts help IDA along by leveraging the known structure of the kernelcache to
 automatically propagate useful information.
 
+In addition to the stock functionality in the module, ida_kernelcache contains several scripts to
+make analyzing the iOS kernelcache easier. For example, you can use the scripts to autogenerate C
+structs used by a function.
+
 Many of the techniques used in ida_kernelcache were developed for and borrowed directly from
 [memctl].
 
@@ -29,10 +33,8 @@ Many of the techniques used in ida_kernelcache were developed for and borrowed d
 
 ## Versions
 
-ida_kernelcache has been tested with IDA Pro 6.95 on the iPhone 7 10.1.1, 11.0, and 11.2
-kernelcaches. Currently only Arm64 kernelcaches from iOS 10 and later are supported.
-
-The new iOS 12 kernelcache format is not yet fully supported.
+ida_kernelcache has been tested with IDA Pro 6.95 on kernelcaches for iOS versions 10.1.1, 11.0,
+11.2, 11.3.1, and 12.0 beta. Currently only Arm64 kernelcaches from iOS 10 and later are supported.
 
 ## Getting started
 

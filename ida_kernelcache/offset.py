@@ -95,6 +95,8 @@ def initialize_offset_symbols():
 
     Search through the kernelcache for global offset tables (__got sections), convert each offset
     into an offset type in IDA, and rename each offset according to its target.
+
+    This function does nothing in the newer 12-merged format kernelcache.
     """
     next_offset = internal.make_name_generator(kernelcache_offset_suffix)
     for ea in idautils.Segments():

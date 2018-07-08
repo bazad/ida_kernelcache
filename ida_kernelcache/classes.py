@@ -8,6 +8,7 @@
 #
 
 import collect_classes
+import ida_utilities as idau
 import vtable
 
 class_info = {}
@@ -43,7 +44,7 @@ class ClassInfo(object):
 
     @property
     def vtable_methods(self):
-        return self.vtable + vtable.VTABLE_OFFSET
+        return self.vtable + vtable.VTABLE_OFFSET * idau.WORD_SIZE
 
     @property
     def vtable_nmethods(self):

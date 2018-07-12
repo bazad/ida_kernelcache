@@ -48,6 +48,8 @@ class ClassInfo(object):
 
     @property
     def vtable_nmethods(self):
+        if not self.vtable_length or self.vtable_length < vtable.VTABLE_OFFSET:
+            return 0
         return self.vtable_length - vtable.VTABLE_OFFSET
 
     def ancestors(self, inclusive=False):

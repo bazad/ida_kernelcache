@@ -297,13 +297,6 @@ def _collect_vtables(metaclass_info):
         mcinfo = ['{:#x} ({})'.format(mc, metaclass_info[mc].classname) for mc in metaclasses]
         _log(0, 'Vtable {:#x} has multiple metaclasses: {}', vtable, ', '.join(mcinfo))
     metaclass_to_vtable = metaclass_to_vtable_builder.build(bad_metaclass, bad_vtable)
-    # Print a list of the metaclasses that have been eliminated.
-    if _log(1):
-        original  = set(metaclass_info.keys())
-        remaining = set(metaclass_to_vtable.keys())
-        _log(1, 'Eliminated classes:')
-        for metaclass in original.difference(remaining):
-            _log(1, '\t{:#x}  {}', metaclass, metaclass_info[metaclass].classname)
     # The resulting mapping may have fewer metaclasses than metaclass_info.
     class_info = dict()
     for metaclass, classinfo in metaclass_info.items():
@@ -316,11 +309,16 @@ def _collect_vtables(metaclass_info):
                 classinfo.vtable        = vtable
                 classinfo.vtable_length = vtable_lengths[vtable]
                 break
-            metaclass_with_vtable = metaclass_info[metaclass_with_vtable].meta_superclass
+            classinfo_with_vtable = metaclass_info.get(metaclass_with_vtable, None)
+            if not classinfo_with_vtable:
+                break
+            metaclass_with_vtable = classinfo_with_vtable.meta_superclass
         # Set the superclass field and add the current classinfo to the superclass's children. This
         # is safe since this is the last filtering operation.
-        classinfo.superclass = metaclass_info[classinfo.meta_superclass]
-        classinfo.superclass.subclasses.add(classinfo)
+        superclass = metaclass_info.get(classinfo.meta_superclass, None)
+        if superclass:
+            classinfo.superclass = metaclass_info[classinfo.meta_superclass]
+            classinfo.superclass.subclasses.add(classinfo)
         # Add the classinfo to the final dictionary.
         class_info[classinfo.classname] = classinfo
     return class_info, vtable_lengths

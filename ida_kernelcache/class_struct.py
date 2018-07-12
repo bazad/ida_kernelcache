@@ -354,7 +354,7 @@ def initialize_class_structs(style=DEFAULT_STYLE):
     # A generator that will yield (virtual_method, classname, X0).
     def virtual_methods():
         for classinfo in classes.class_info.values():
-            for vmethod in vtable.class_vtable_methods(classinfo, new=True):
+            for _, vmethod, _ in vtable.class_vtable_overrides(classinfo, new=True, methods=True):
                 if not idau.is_function_start(vmethod):
                     _log(3, 'Non-function virtual method {:#x} in class {}', vmethod,
                             classinfo.classname)

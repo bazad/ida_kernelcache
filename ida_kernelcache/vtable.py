@@ -201,6 +201,7 @@ def vtable_methods(vtable, start=VTABLE_OFFSET, length=None, nmethods=None):
         nmethods: The number of methods to read, excluding the initial empty entries. If None, the
             whole vtable will be read. Default is None.
     """
+    assert vtable
     # Get the length of the vtable.
     if nmethods is not None:
         length = nmethods + VTABLE_OFFSET
@@ -224,6 +225,8 @@ def class_vtable_methods(classinfo, nmethods=None, new=False):
             whole vtable will be read. Default is None.
         new: If True, only return methods not defined in the superclass. Default is False.
     """
+    if not classinfo.vtable:
+        return []
     if new and classinfo.superclass:
         start = classinfo.superclass.vtable_length
     else:
@@ -250,6 +253,7 @@ def vtable_overrides(class_vtable, super_vtable, class_vlength=None, super_vleng
             overridden method in the subclass, and the original method in the superclas, rather
             than just the index. Default is False.
     """
+    assert class_vtable
     # Get the vtable lengths.
     if class_vlength is None:
         class_vlength = vtable_length(class_vtable)
@@ -298,6 +302,8 @@ def class_vtable_overrides(classinfo, superinfo=None, new=False, methods=False):
             overridden method in the subclass, and the original method in the superclas, rather
             than just the index. Default is False.
     """
+    if not classinfo.vtable:
+        return
     # Get the correct superinfo.
     if superinfo is None:
         # Default to the superclass, but if there isn't one, there's nothing to do.

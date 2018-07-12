@@ -122,7 +122,7 @@ identifier from the `__PRELINK_INFO` dictionary and renames each segment to incl
 identifier, Mach-O segment, and Mach-O section. This makes it possible, for example, to distinguish
 between `__TEXT.__const` and `__DATA_CONST.__const`. This module also provides the function
 `kernelcache_kext` (re-exported at the top level) to determine the kext containing the specified
-address.
+address (only on the old iOS 11 split-kext kernelcache format).
 
 * **stub**:
 Many kexts in the kernelcache contain stub functions in a `__stubs` section that jump to functions
@@ -131,6 +131,11 @@ and type information. This module doesn't solve these problems, but it does make
 bit easier by automatically renaming stub functions so that the target function name is visible.
 Stubs and their targets are forcibly converted into functions in IDA, which helps make the
 functions in IDA line up with the functions in the original source code.
+
+* **tagged_pointers**:
+The new iOS 12 merged kernelcache format has the upper 2 bytes of each pointer tagged with an
+offset in order to chain the pointers together in a list. This module contains functions for
+processing and restoring those tagged pointers.
 
 * **vtable**:
 This module provides many useful functions for working with virtual method tables, including

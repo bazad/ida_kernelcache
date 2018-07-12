@@ -354,7 +354,7 @@ def initialize_class_structs(style=DEFAULT_STYLE):
     # A generator that will yield (virtual_method, classname, X0).
     def virtual_methods():
         for classinfo in classes.class_info.values():
-            for _, vmethod, _ in vtable.class_vtable_overrides(classinfo, new=True, methods=True):
+            for vmethod in vtable.class_vtable_methods(classinfo, new=True):
                 if not idau.is_function_start(vmethod):
                     _log(3, 'Non-function virtual method {:#x} in class {}', vmethod,
                             classinfo.classname)
@@ -505,4 +505,44 @@ def process_functions(functions, style=DEFAULT_STYLE):
     # Finally, convert each operand that generated an access into an appropriately typed struct
     # offset reference.
     _convert_operands_to_struct_offsets(class_operands)
+
+#### Vtable type propagation ######################################################################
+
+def _propagate_virtual_method_type_for_method(classinfo, class_vindex, vmethod):
+    """Propagate the type of a class's virtual method to the vtable struct."""
+    if not idau.is_function_start(vmethod):
+        _log(2, 'Not a function start: {:x}', vmethod)
+        return False
+    vmethod_type = idc.GuessType(vmethod)
+    if not vmethod_type:
+        _log(2, 'No guessed type: {:x}', vmethod)
+        return False
+    vmethod_ptr_type = symbol.convert_function_type_to_function_pointer_type(vmethod_type)
+    if not vmethod_ptr_type:
+        _log(2, 'Could not convert to function pointer type: {:x}', vmethod)
+        return False
+    vmethods_sid = idau.struct_open(classinfo.classname + '::vmethods')
+    vmethod_offset = class_vindex * idau.WORD_SIZE
+    vmethod_mid = idc.GetMemberId(vmethods_sid, vmethod_offset)
+    if not bool(idc.SetType(vmethod_mid, vmethod_ptr_type)):
+        _log(2, 'Could not set vmethod field type: {:x}, {}, {}', vmethod, classinfo.classname,
+                class_vindex)
+        return False
+    return True
+
+def _propagate_virtual_method_types_for_class(classinfo):
+    """Propagate the types of a class's virtual methods to the vtable struct."""
+    for relative_index, vmethod in enumerate(vtable.class_vtable_methods(classinfo, new=True)):
+        _propagate_virtual_method_type_for_method(classinfo, relative_index, vmethod)
+
+def propagate_virtual_method_types_to_vtable_structs():
+    """Propagate the types of virtual methods to the corresponding entries in the vtables.
+
+    This helps speed decompilation using Hex-Rays, but is not particularly accurate.
+
+    By default, IDA will guess a type with an empty argument list for any function whose symbol
+    includes an unknown struct type, which inhibits proper type inference.
+    """
+    for classinfo in classes.class_info.values():
+        _propagate_virtual_method_types_for_class(classinfo)
 

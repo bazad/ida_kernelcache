@@ -5,6 +5,9 @@
 """ida_kernelcache.class_struct
 
 This module deals with processing and transforming symbol strings. It does not modify IDA.
+
+TODO: A lot of functions in this module really have to do with processing type strings, not symbol
+strings.
 """
 
 import re
@@ -87,6 +90,18 @@ def method_argument_types(symbol, sign=True):
     except:
         return None
 
+def convert_function_type_to_function_pointer_type(typestr):
+    """Convert a function type string into a function pointer type string.
+
+    For example:
+        __int64 __fastcall(arg1, arg2) => __int64 __fastcall (*)(arg1, arg2)
+    """
+    try:
+        return_part, args_part = typestr.split('(', 1)
+        return return_part + ' (*)(' + args_part
+    except:
+        return None
+
 def make_ident(name):
     """Convert a name into a valid identifier, substituting any invalid characters."""
     ident = ''
@@ -122,6 +137,16 @@ def vtable_symbol_for_class(classname):
     if not name:
         return None
     return '__ZTV' + name
+
+def vtable_symbol_get_class(symbol):
+    """Get the class name for a vtable symbol."""
+    try:
+        demangled = idc.Demangle(symbol, idc.GetLongPrm(idc.INF_SHORT_DN))
+        pre, post = demangled.split("`vtable for'", 1)
+        assert pre == ''
+        return post
+    except:
+        return None
 
 def global_name(name):
     """Get the mangled symbol name for the global name.

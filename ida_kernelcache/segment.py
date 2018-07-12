@@ -131,14 +131,46 @@ def initialize_segments():
             _log(1, 'Renaming segments in {}', kext)
             _initialize_segments_in_kext(kext, mach_header)
 
+_kext_regions = []
+
+def _initialize_kext_regions():
+    """Get region information for each kext based on iOS 12's __PRELINK_INFO.__kmod_start.
+
+    NOTE: This only accounts for __TEXT_EXEC, not the other segments."""
+    kmod_start = idc.SegByBase(idc.SegByName('__PRELINK_INFO.__kmod_start'))
+    if kmod_start == idc.BADADDR:
+        return
+    for kmod in idau.ReadWords(kmod_start, idc.SegEnd(kmod_start)):
+        _log(1, 'Found kmod {:x}', kmod)
+        segments = list(_macho_segments_and_sections(kmod))
+        if len(segments) != 1:
+            _log(0, 'Skipping unrecognized kmod {:x}', kmod)
+            continue
+        segname, segstart, segend, sects = segments[0]
+        if segname != '__TEXT_EXEC' or len(sects) != 1:
+            _log(0, 'Skipping unrecognized kmod {:x}', kmod)
+            continue
+        kmod_name = 'kext.{:x}'.format(kmod)
+        _log(1, 'Adding module:  {:x} - {:x}  {}', segstart, segend, kmod_name)
+        _kext_regions.append((segstart, segend, kmod_name))
+
+_initialize_kext_regions()
+
 def kernelcache_kext(ea):
     """Return the name of the kext to which the given linear address belongs.
 
     Only works if segments have been renamed using initialize_segments().
+
+    NOTE: Kexts are not well distinguished on the new iOS 12 merged kernelcache format. Do not rely
+    on this function.
     """
     # TODO: This doesn't work on 12-merged kernelcaches!
     name = idc.SegName(ea) or ''
     if ':' in name:
         return idc.SegName(ea).split(':', 1)[0]
+    if _kext_regions:
+        for start, end, kext in _kext_regions:
+            if start <= ea < end:
+                return kext
     return None
 

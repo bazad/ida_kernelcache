@@ -168,14 +168,34 @@ def initialize_vtable_symbols():
         else:
             _log(0, 'Class {} has no known vtable', classname)
 
-def vtable_methods(vtable, length=None, nmethods=None):
+def class_vtable_method(classinfo, index):
+    """Get the virtual method for a class by index.
+
+    Arguments:
+        classinfo: The class information of the class.
+        index: The index of the virtual method, skipping the empty entries (that is, the first
+            virtual method is at index 0).
+    """
+    # Get the vtable for the class.
+    methods = classinfo.vtable_methods
+    count = classinfo.vtable_nmethods
+    if index >= count:
+        return None
+    return idau.read_word(methods + index * idau.WORD_SIZE)
+
+def vtable_methods(vtable, start=VTABLE_OFFSET, length=None, nmethods=None):
     """Get the methods in a virtual method table.
 
     A generator that returns each method in the virtual method table. The initial empty entries are
     skipped.
 
-    Options:
+    Arguments:
         vtable: The address of the virtual method table. (This includes the initial empty entries.)
+
+    Options:
+        start: The index at which to start returning values. All prior indexes
+            are skipped. Default is VTABLE_OFFSET, meaning the initial empty
+            entries will be skipped.
         length: The length of the vtable, including the initial empty entries. Specify this value
             to read the entire vtable if the length is already known.
         nmethods: The number of methods to read, excluding the initial empty entries. If None, the
@@ -187,10 +207,10 @@ def vtable_methods(vtable, length=None, nmethods=None):
     elif length is None:
         length = vtable_length(vtable)
     # Read the methods.
-    for i in xrange(VTABLE_OFFSET, length):
+    for i in xrange(start, length):
         yield idau.read_word(vtable + i * idau.WORD_SIZE)
 
-def class_vtable_methods(classinfo, nmethods=None):
+def class_vtable_methods(classinfo, nmethods=None, new=False):
     """Get the methods in a virtual method table for a class.
 
     A generator that returns each method in the virtual method table. The initial empty entries are
@@ -202,15 +222,21 @@ def class_vtable_methods(classinfo, nmethods=None):
     Options:
         nmethods: The number of methods to read, excluding the initial empty entries. If None, the
             whole vtable will be read. Default is None.
+        new: If True, only return methods not defined in the superclass. Default is False.
     """
-    return vtable_methods(classinfo.vtable, length=classinfo.vtable_length, nmethods=nmethods)
+    if new and classinfo.superclass:
+        start = classinfo.superclass.vtable_length
+    else:
+        start = VTABLE_OFFSET
+    return vtable_methods(classinfo.vtable, start=start, length=classinfo.vtable_length,
+            nmethods=nmethods)
 
 def vtable_overrides(class_vtable, super_vtable, class_vlength=None, super_vlength=None,
         new=False, methods=False):
     """Get the overrides of a virtual method table.
 
     A generator that returns the index of each override in the virtual method table. The initial
-    empty entries are skipped.
+    empty entries are skipped, so the first virtual method is at index 0.
 
     Arguments:
         class_vtable: The vtable of the class.
@@ -259,7 +285,7 @@ def class_vtable_overrides(classinfo, superinfo=None, new=False, methods=False):
     """Get the overrides of a virtual method table for a class.
 
     A generator that returns the index of each override in the virtual method table. The initial
-    empty entries are skipped.
+    empty entries are skipped, so the first virtual method is at index 0.
 
     Arguments:
         classinfo: The ClassInfo of the class to inspect.
@@ -313,6 +339,7 @@ def class_from_vtable_method_symbol(method_symbol):
 
 def _vtable_method_symbol_substitute_class(method_symbol, new_class, old_class=None):
     """Create a new method symbol by substituting the class to which the method belongs."""
+    # TODO: This is wrong when the class name is repeated!
     if not old_class:
         old_class = class_from_vtable_method_symbol(method_symbol)
         if not old_class:

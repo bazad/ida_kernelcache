@@ -14,6 +14,7 @@ import idaapi
 import ida_utilities as idau
 import classes
 import segment
+import symbol
 import vtable
 
 _log = idau.make_log(1, __name__)
@@ -253,10 +254,29 @@ def _collect_vtables(metaclass_info):
     # Build a mapping from OSMetaClass instances to virtual method tables.
     metaclass_to_vtable_builder = _OneToOneMapFactory()
     vtable_lengths = {}
+    # Define a callback for when we find a vtable.
     def found_vtable(metaclass, vtable, length):
+        # Add our vtable length.
         vtable_lengths[vtable] = length
+        # If our classname has a defined vtable symbol and that symbol's address isn't this vtable,
+        # don't add the link.
+        classname = metaclass_info[metaclass].classname
+        proper_vtable_symbol = symbol.vtable_symbol_for_class(classname)
+        proper_vtable_symbol_ea = idau.get_name_ea(proper_vtable_symbol)
+        if proper_vtable_symbol_ea not in (idc.BADADDR, vtable):
+            return
+        # If our vtable has a symbol and it doesn't match the metaclass, skip adding a link.
+        vtable_symbol = idau.get_ea_name(vtable, user=True)
+        if vtable_symbol:
+            vtable_classname = symbol.vtable_symbol_get_class(vtable_symbol)
+            if vtable_classname != classname:
+                _log(2, 'Declining association between metaclass {:x} ({}) and vtable {:x} ({})',
+                        metaclass, classname, vtable, vtable_classname)
+                return
+        # Add a link if they are in the same kext.
         if segment.kernelcache_kext(metaclass) == segment.kernelcache_kext(vtable):
             metaclass_to_vtable_builder.add_link(metaclass, vtable)
+    # Process all the segments with found_vtable().
     for ea in idautils.Segments():
         segname = idc.SegName(ea)
         if not segname.endswith('__DATA_CONST.__const'):
@@ -266,11 +286,12 @@ def _collect_vtables(metaclass_info):
     # If a metaclass has multiple vtables, that's really weird, unless the metaclass is
     # OSMetaClass's metaclass. In that case all OSMetaClass subclasses will have their vtables
     # refer back to OSMetaClass's metaclass.
-    # TODO: Right now we don't do anything special for this case.
     def bad_metaclass(metaclass, vtables):
-        vtinfo = ['{:#x}'.format(vt) for vt in vtables]
-        _log(0, 'Metaclass {:#x} ({}) has multiple vtables: {}', metaclass,
-                metaclass_info[metaclass].classname, ', '.join(vtinfo))
+        metaclass_name = metaclass_info[metaclass].classname
+        if metaclass_name != 'OSMetaClass':
+            vtinfo = ['{:#x}'.format(vt) for vt in vtables]
+            _log(0, 'Metaclass {:#x} ({}) has multiple vtables: {}', metaclass,
+                    metaclass_name, ', '.join(vtinfo))
     # If a vtable has multiple metaclasses, that's really weird.
     def bad_vtable(vtable, metaclasses):
         mcinfo = ['{:#x} ({})'.format(mc, metaclass_info[mc].classname) for mc in metaclasses]
@@ -285,16 +306,22 @@ def _collect_vtables(metaclass_info):
             _log(1, '\t{:#x}  {}', metaclass, metaclass_info[metaclass].classname)
     # The resulting mapping may have fewer metaclasses than metaclass_info.
     class_info = dict()
-    for metaclass, vtable in metaclass_to_vtable.items():
-        classinfo = metaclass_info[metaclass]
-        # Add the vtable and its length, which we didn't have earlier.
-        classinfo.vtable        = vtable
-        classinfo.vtable_length = vtable_lengths[vtable]
-        # If this class's superclass is still live, set its superclass field and add ourselves to
-        # the superclass's children. This is safe since this is the last filtering operation.
-        if classinfo.meta_superclass in metaclass_to_vtable:
-            classinfo.superclass = metaclass_info[classinfo.meta_superclass]
-            classinfo.superclass.subclasses.add(classinfo)
+    for metaclass, classinfo in metaclass_info.items():
+        # Add the vtable and its length, which we didn't have earlier. If the current class doesn't
+        # have a vtable, take it from the superclass (recursing if necessary).
+        metaclass_with_vtable = metaclass
+        while metaclass_with_vtable:
+            vtable = metaclass_to_vtable.get(metaclass_with_vtable, None)
+            if vtable:
+                classinfo.vtable        = vtable
+                classinfo.vtable_length = vtable_lengths[vtable]
+                break
+            metaclass_with_vtable = metaclass_info[metaclass_with_vtable].meta_superclass
+        # Set the superclass field and add the current classinfo to the superclass's children. This
+        # is safe since this is the last filtering operation.
+        classinfo.superclass = metaclass_info[classinfo.meta_superclass]
+        classinfo.superclass.subclasses.add(classinfo)
+        # Add the classinfo to the final dictionary.
         class_info[classinfo.classname] = classinfo
     return class_info, vtable_lengths
 

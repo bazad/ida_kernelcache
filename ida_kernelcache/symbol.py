@@ -72,6 +72,25 @@ def method_arguments(symbol):
     except:
         return None
 
+def method_argument_pointer_types(symbol):
+    """Get the base types of pointer types used in the arguments to a C++ method."""
+    args = method_arguments_string(symbol)
+    if args is None:
+        return None
+    if not args or args == 'void':
+        return set()
+    args = re.sub(r"[&]|\bconst\b", ' ', args)
+    args = re.sub(r"\bunsigned\b", ' ', args)
+    args = re.sub(r" +", ' ', args)
+    argtypes = set(arg.strip() for arg in re.split(r"[,()]", args))
+    ptrtypes = set()
+    for argtype in argtypes:
+        if re.match(r"[^ ]+ [*][* ]*", argtype):
+            ptrtypes.add(argtype.split(' ', 1)[0])
+    ptrtypes.difference_update(['void', 'bool', 'char', 'short', 'int', 'long', 'float', 'double',
+        'longlong', '__int64'])
+    return ptrtypes
+
 def method_argument_types(symbol, sign=True):
     """Get the base types used in the arguments to a C++ method."""
     try:
@@ -80,9 +99,9 @@ def method_argument_types(symbol, sign=True):
             return None
         if not args or args == 'void':
             return set()
-        args = re.sub(r"[*&]|const", ' ', args)
+        args = re.sub(r"[*&]|\bconst\b", ' ', args)
         if not sign:
-            args = re.sub(r"unsigned", ' ', args)
+            args = re.sub(r"\bunsigned\b", ' ', args)
         args = re.sub(r" +", ' ', args)
         argtypes = set(arg.strip() for arg in re.split(r"[,()]", args))
         argtypes.discard('')

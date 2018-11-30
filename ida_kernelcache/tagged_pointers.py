@@ -56,6 +56,7 @@ def tagged_pointer_next(ea, tp, end=None):
     return None
 
 def untag_pointer(ea, tp):
+    _log(4, 'Untagging pointer at {:x}', ea)
     idau.patch_word(ea, tagged_pointer_untag(tp))
     idc.OpOff(ea, 0, 0)
 

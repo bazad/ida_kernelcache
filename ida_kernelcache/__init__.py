@@ -40,19 +40,21 @@ def kernelcache_process(untag_pointers=True):
         * Symbolicates methods in vtables based on the method names in superclasses.
         * Creates IDA structs representing the C++ classes in the kernel.
     """
+    import idaapi
     import idc
     def autoanalyze():
         idc.Wait()
     autoanalyze()
-    if kernel.kernelcache_format == kernel.KC_12_MERGED and untag_pointers:
+    if (kernel.kernelcache_format == kernel.KC_12_MERGED
+            and untag_pointers
+            and idaapi.IDA_SDK_VERSION < 720):
         print 'Processing tagged kernelcache pointers'
         tagged_pointers.untag_pointers()
         autoanalyze()
     segment.initialize_segments()
-    if kernel.kernelcache_format == kernel.KC_11_NORMAL:
-        print 'Initializing data offsets'
-        offset.initialize_data_offsets()
-        autoanalyze()
+    print 'Initializing data offsets'
+    offset.initialize_data_offsets()
+    autoanalyze()
     print 'Initializing vtables'
     vtable.initialize_vtables()
     autoanalyze()

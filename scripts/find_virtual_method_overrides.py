@@ -7,18 +7,42 @@
 
 def kernelcache_find_virtual_method_overrides(classname=None, method=None):
     import idc
+    import idaapi
     import ida_kernelcache as kc
+
+    # Define the form to ask for the arguments.
+    class MyForm(idaapi.Form):
+        def __init__(self):
+            swidth = 40
+            idaapi.Form.__init__(self, r"""STARTITEM 0
+Find virtual method overrides
+
+<#The class#Class :{classname}>
+<#The virtual method#Method:{method}>""", {
+                'classname': idaapi.Form.StringInput(tp=idaapi.Form.FT_IDENT, swidth=swidth),
+                'method':    idaapi.Form.StringInput(tp=idaapi.Form.FT_IDENT, swidth=swidth),
+            })
+        def OnFormChange(self, fid):
+            return 1
 
     kc.collect_class_info()
 
-    if not classname:
-        classname = idc.AskStr('IOUserClient', 'Enter class name')
+    if any(arg is None for arg in (classname, method)):
+        f = MyForm()
+        f.Compile()
+        f.classname.value = classname or ''
+        f.method.value    = method    or ''
+        ok = f.Execute()
+        if ok != 1:
+            print 'Cancelled'
+            return False
+        classname = f.classname.value
+        method    = f.method.value
+        f.Free()
+
     if classname not in kc.class_info:
         print 'Not a valid class: {}'.format(classname)
         return False
-
-    if not method:
-        method = idc.AskStr('externalMethod', 'Enter method name')
 
     print 'Subclasses of {} that override {}:'.format(classname, method)
     baseinfo = kc.class_info[classname]
